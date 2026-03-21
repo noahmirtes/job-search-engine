@@ -7,6 +7,9 @@ Jobs are fetched from an API (Google Jobs via SerpApi), and every request/respon
 Each job is automatically scored using a mix of rule-based signals (keywords, title, seniority, etc.) and embedding similarity against your resume and an “ideal job” reference.
 Exports generate a spreadsheet of only new, unseen jobs from the latest ingestion window that meet a minimum score threshold. This becomes your working list of jobs to apply to.
 
+Link to this repo:
+https://github.com/noahmirtes/job-search-engine
+
 SerpAPI docs Link:
 https://serpapi.com/google-jobs-api
 
