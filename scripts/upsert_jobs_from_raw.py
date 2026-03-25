@@ -8,7 +8,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.config import WorkerPaths, initialize_config
-from app.search import run_enabled_queries
+from app.db import get_connection, init_db
+from app.jobs import upsert_jobs_from_raw_response_json
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
@@ -25,19 +26,26 @@ def _default_paths(project_root: Path) -> WorkerPaths:
 
 def main() -> None:
     config = initialize_config(_default_paths(PROJECT_ROOT))
-    summary = run_enabled_queries(config)
+    init_db(config.paths.db_path)
 
-    print(f"Queries run: {summary.queries_run}")
-    print(f"Total pages fetched: {summary.total_pages_fetched}")
-    print(f"Total raw requests stored: {summary.total_raw_requests_stored}")
-    print(f"Total jobs upserted: {summary.total_jobs_upserted}")
-    for query_summary in summary.query_summaries:
-        print(
-            f"- {query_summary.query_name}: "
-            f"{query_summary.pages_fetched} pages, "
-            f"{len(query_summary.stored_request_ids)} stored requests, "
-            f"{query_summary.jobs_upserted} jobs upserted"
-        )
+    raw_requests_processed = 0
+    total_jobs_upserted = 0
+
+    with get_connection(config.paths.db_path) as connection:
+        rows = connection.execute(
+            "SELECT id, response_json FROM raw_requests ORDER BY id"
+        ).fetchall()
+
+        for row in rows:
+            response_json = row["response_json"]
+            total_jobs_upserted += upsert_jobs_from_raw_response_json(
+                connection,
+                response_json,
+            )
+            raw_requests_processed += 1
+
+    print(f"Raw requests processed: {raw_requests_processed}")
+    print(f"Total jobs upserted: {total_jobs_upserted}")
 
 
 if __name__ == "__main__":

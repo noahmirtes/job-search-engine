@@ -23,40 +23,31 @@ Core Goals
 
 ⸻
 
-Core Architecture
+Current Structure
+	•	`app/` contains the shared runtime code that will be bundled into the Docker image
+	•	`scripts/` contains lightweight entrypoints and local helpers that call into `app/`
+	•	`config/` contains per-person inputs and runtime state for one user profile
 
-The system has two primary entry points:
-
-1. Ingestion
-
-Responsible for:
-	•	executing configured search queries against SerpApi
-	•	storing every raw request/response
-	•	normalizing returned jobs
-	•	deduplicating job records
-	•	automatically scoring newly ingested jobs
-
-This creates a historical archive of all collected job data.
+The current `config/` folder is the testing profile for one person. Later, an orchestrator can point the worker at a different person's config folder without changing the core code.
 
 ⸻
 
-2. Export
+Architecture
 
-Responsible for:
-	•	selecting jobs that have not been exported before
-	•	filtering to jobs worth reviewing
-	•	generating an .xlsx file
-	•	including full job descriptions in the export
+The runtime is centered around the `app` package. It owns the reusable logic for:
+	•	loading config and environment values
+	•	initializing the database
+	•	executing SerpApi searches
+	•	storing raw requests and responses
+	•	preparing the search pipeline for later normalization, scoring, and export work
 
-This is the primary interface for reviewing and applying to jobs.
+The config folder stays outside the application package because it is person-specific. That lets us run the same Docker image against different sets of inputs by swapping paths rather than rewriting code.
 
-⸻
+The current flow is:
 
-Core Pipeline
+load per-person config → validate inputs → load env → initialize db → run configured SerpApi searches → store raw responses
 
-request jobs → store raw response → normalize jobs → deduplicate → score → store score → export unseen jobs
-
-Scoring is automatic and occurs during ingestion.
+Normalization, scoring, and export will sit behind the same `app` package as the project grows, so the worker stays easy to package and reuse.
 
 ⸻
 
@@ -155,18 +146,14 @@ Each row includes:
 
 Configuration
 
-Search queries are stored in a JSON config file:
+Per-person inputs live in `config/`:
+	•	`config/queries.json` defines the enabled search requests
+	•	`config/resume.txt` holds the resume text used for comparison
+	•	`config/ideal_job.txt` holds the target-role reference text
+	•	`config/.env` holds private environment values such as `SERPAPI_API_KEY`
+	•	`config/jobs.db` is the SQLite database for that person
 
-config/queries.json
-
-This allows:
-	•	easy iteration on search strategy
-	•	separation of configuration from code
-	•	flexible control over:
-	•	search phrases
-	•	location
-	•	remote filters
-	•	pagination depth
+This layout keeps the worker stateless with respect to inputs. The code stays the same, while the orchestrator or local setup can swap the config folder per person.
 
 ⸻
 
@@ -200,27 +187,21 @@ Suggested Project Structure
 
 job-search-engine/
 	•	app/
-	•	clients/
-	•	ingest/
-	•	scoring/
-	•	embeddings/
-	•	export/
-	•	db/
-	•	config/
+	•	config.py
+	•	db.py
+	•	main.py
+	•	serpapi.py
 	•	scripts/
-	•	ingest_jobs.py
-	•	export_jobs.py
-	•	data/
-	•	jobs.db
-	•	cache/
+	•	init_db.py
+	•	run_search.py
 	•	config/
 	•	queries.json
 	•	resume.txt
 	•	ideal_job.txt
+	•	.env
+	•	jobs.db
 	•	README.md
 	•	requirements.txt
-	•	.env
-	•	.env.example
 
 ⸻
 
@@ -288,16 +269,21 @@ Tech Stack
 
 ⸻
 
-Usage (Planned)
+Usage
 
-Run ingestion:
+Initialize the local database:
 
-python scripts/ingest_jobs.py
+```bash
+python scripts/init_db.py
+```
 
-Run export:
+Run the configured search pipeline:
 
-python scripts/export_jobs.py
+```bash
+python scripts/run_search.py
+```
 
+Those scripts are intentionally thin wrappers around `app`, which keeps the core Docker image focused on shared runtime behavior instead of CLI glue.
 
 ⸻
 

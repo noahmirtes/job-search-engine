@@ -6,6 +6,20 @@
     "request": {
       "engine": "google_jobs",
       "google_domain": "google.com",
+      "q": "junior backend engineer",
+      "location": "United States",
+      "ltype": "1",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "python_backend_remote_us",
+    "enabled": false,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
       "q": "python backend engineer",
       "location": "United States",
       "ltype": "1",
