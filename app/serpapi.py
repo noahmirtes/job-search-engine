@@ -1,3 +1,5 @@
+"""Thin SerpApi client wrapper with predictable paging behavior."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,11 +9,13 @@ import serpapi
 
 
 class SerpApiError(RuntimeError):
+    """Raised for request/response issues from SerpApi."""
     pass
 
 
 @dataclass(frozen=True)
 class SearchPage:
+    """One fetched page plus request metadata used by downstream storage."""
     query_name: str
     page_number: int
     request: dict[str, Any]
@@ -20,6 +24,7 @@ class SearchPage:
 
 
 class SerpApiService:
+    """Service wrapper that handles Google Jobs paging tokens."""
     def __init__(self, api_key: str, *, timeout: int = 30) -> None:
         self.client = serpapi.Client(api_key=api_key, timeout=timeout)
 
@@ -30,6 +35,7 @@ class SerpApiService:
         max_pages: int = 1,
         query_name: str = "query",
     ) -> list[SearchPage]:
+        """Fetch up to max_pages pages for a query request."""
         base_request = dict(request)
         base_request.setdefault("engine", "google_jobs")
 
@@ -58,6 +64,7 @@ class SerpApiService:
         return pages
 
     def _search_once(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Execute one API call and validate payload shape."""
         try:
             results = self.client.search(request)
         except Exception as exc:
@@ -74,6 +81,7 @@ class SerpApiService:
 
 
 def extract_next_page_token(payload: dict[str, Any]) -> str | None:
+    """Extract pagination token from a SerpApi response payload."""
     pagination = payload.get("serpapi_pagination")
     if not isinstance(pagination, dict):
         return None

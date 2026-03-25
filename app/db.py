@@ -1,3 +1,5 @@
+"""SQLite schema and persistence helpers for ingestion/runtime state."""
+
 from __future__ import annotations
 
 import json
@@ -8,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
+# Canonical schema applied on fresh DB creation.
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 
@@ -86,10 +89,12 @@ CREATE INDEX IF NOT EXISTS idx_export_jobs_job_id ON export_jobs(job_id);
 
 
 def utc_now_iso() -> str:
+    """Return current UTC timestamp as ISO-8601 seconds precision."""
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def init_db(db_path: Path) -> None:
+    """Initialize DB schema and apply non-destructive schema syncs."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as connection:
         connection.executescript(SCHEMA)
@@ -136,6 +141,7 @@ def _sync_jobs_table_schema(connection: sqlite3.Connection) -> None:
 
 @contextmanager
 def get_connection(db_path: Path) -> Iterator[sqlite3.Connection]:
+    """Yield a SQLite connection with commit/close lifecycle handled."""
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
@@ -153,9 +159,12 @@ def log_raw_request(
     query_params: dict[str, Any],
     response_payload: dict[str, Any],
     response_status: int,
+    requested_at: str | None = None,
 ) -> int:
+    """Persist one raw API request/response payload and return row id."""
     jobs_results = response_payload.get("jobs_results", [])
     result_count = len(jobs_results) if isinstance(jobs_results, list) else None
+    effective_requested_at = requested_at or utc_now_iso()
 
     cursor = connection.execute(
         """
@@ -174,7 +183,7 @@ def log_raw_request(
             json.dumps(response_payload, sort_keys=True),
             response_status,
             result_count,
-            utc_now_iso(),
+            effective_requested_at,
         ),
     )
     return int(cursor.lastrowid)

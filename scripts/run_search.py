@@ -1,3 +1,5 @@
+"""Run enabled query ingestion: fetch pages, archive raw, upsert jobs."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,6 +14,7 @@ from app.search import run_enabled_queries
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
+    """Build default single-profile path mapping for local runs."""
     config_dir = project_root / "config"
     return WorkerPaths(
         db_path=config_dir / "jobs.db",
@@ -24,6 +27,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
 
 
 def main() -> None:
+    """Entrypoint for running the full enabled-query ingest flow."""
     config = initialize_config(_default_paths(PROJECT_ROOT))
     summary = run_enabled_queries(config)
 

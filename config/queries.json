@@ -2,7 +2,7 @@
   {
     "name": "backend_remote_us",
     "enabled": true,
-    "max_pages": 1,
+    "max_pages": 2,
     "request": {
       "engine": "google_jobs",
       "google_domain": "google.com",
