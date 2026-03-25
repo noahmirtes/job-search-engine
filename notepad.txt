@@ -15,3 +15,71 @@ https://serpapi.com/google-jobs-api
 
 Redditor who made a similar thing:
 https://www.reddit.com/r/dataengineering/comments/1i6y6pb/i_built_a_free_job_board_that_uses_ai_to_find/
+
+
+# ----------------------------------------------------- #
+
+My thoughts on the structure and flow of this:
+
+All the config and data should be initialized at the beginning into one data class.
+get all paths and then read in all ideal job info, db path, queries, resume, and anything else.
+
+Then, everything else gets loaded in and validated. If validation fails, we stop right there.
+I like this idea because it makes the whole system agnostic to the format and initial structure of the data. This makes tweaks easier down the line.
+Then, the database is initialized.
+
+Now, we can confidently run the actual search flow without any need for checks and fall backs in the main logic.
+
+Instead of a bunch of bloated print statements to the terminal, I want to capture all this in a log. The log should be unique to the run in prep for the docker/worker flow.
+The log file path can be constructed and initialied with everything else (db, queries json, etc.)
+
+Now once we get to this point, we've got super dead simple request and storage logic.
+I think we should make it so that ALL the queries set to enabled==True in the JSON are run. This should cut down on some checks during run. The queries.json file will be the control panel for the search params, so lets utilize that.
+This means we're moving away from CLI as well. We can scrap that logic completely.
+
+Ive got some friends who are on the job hunt as well and I offered to set them up in my system as well.
+All of my friends will have their own folder and in a main Orchestrator file, there will be a path to that folder as well as their email. Then, we use a docker image that is stateless to run and process each persons materials (db, queries, resume, etc).
+The worker will output a completed report to a specific folder. Then, once all the people have been run, the worker will email the reports.
+This will require setting up my gmail API so I can send emails programmatically. Each email should contain a .csv of the report and simple stats from it.
+
+Maybe it makes the most sense to just give the worker paths to certain things. The orchestrator can construct the paths for the db, log, resume, queries, and so on and just pass them to the worker where it stores them as a dataclass, validates everything, loads all th data, and proceeds with the flow.
+That, to me, sounds like the easiest and most flexible way of going about this.
+
+
+# ----------------------------------------------------- #
+
+
+Yep, I just saw that right as I sent that message to you. I see that we never added in the logic to actually parse data and put it into jobs. No problem, that's a good thing then!
+
+So I guess now we can look into the structure and all that.
+I grabbed the json from the database and put it into a file just so I could see it easier.
+
+We got 10 jobs returned and a pretty clear structure that each of them follows.
+Now what we need to determine is how we're going to store it in the database. The schema you have right now is fine and would generally do fine if we used it, but its leaving some functionality on the table.
+
+You can take a look at the raw_request_example.json file in the folder for structure.
+
+In this data, we get so many other things that I think would be important to flag.
+
+Here's what I'm thinking
+Here's the easy stuff we can store:
+id
+job_id
+Company
+job_title
+location
+Description
+share_link (I think this is a link to the google jobs page directly. Might as well store)
+raw_job_json (raw json of the whole job)
+** Do we need to have a job hash to detect duplicates or can we rely on the job_id field? My guess is we could rely on the job_id field and it would generally get us where we want, but it wouldn't be as solid as the hash. I guess we can just have both.
+
+
+There are some other items that we should consider. Apply options can contain multiple options, so perhaps we have a json value stored there.
+Extensions and detected extensions are also provided. Detected is a dictionary and extensions is just a list. We should store this as well. Extensions can possibly be stored as semi colon separated 'tags' maybe. Could be stored as a list
+Job Highlights contains the content from the description parsed out into titles like Qualifications, Benefits, and Responsibilities. It would be good to store this info. If it's not provided or parsed by serp, we can fall back to the main description. Maybe this could be stored as a long string as well. Its just a list of sentences/items from the description.
+
+So now, I'd like for you to take a look at the JSON of the raw_request_example and see the format that this data lives in and then compare that against what I just said and then we can draft up a plan for the job table schema and how we're going to store everything
+
+
+
+

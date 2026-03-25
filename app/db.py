@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS jobs (
     location TEXT,
     description TEXT,
     apply_url TEXT,
+    share_link TEXT,
+    via TEXT,
+    thumbnail TEXT,
+    posted_at_text TEXT,
+    schedule_type TEXT,
+    work_from_home INTEGER,
+    qualifications_text TEXT,
+    raw_job_json TEXT,
+    apply_options_json TEXT,
+    extensions_json TEXT,
+    detected_extensions_json TEXT,
+    job_highlights_json TEXT,
     date_posted TEXT,
     normalized_hash TEXT NOT NULL UNIQUE,
     first_seen_at TEXT NOT NULL,
@@ -65,6 +77,9 @@ CREATE TABLE IF NOT EXISTS export_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_raw_requests_query_name ON raw_requests(query_name);
 CREATE INDEX IF NOT EXISTS idx_jobs_normalized_hash ON jobs(normalized_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_source_job_id
+ON jobs(source_job_id)
+WHERE source_job_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_job_scores_job_id ON job_scores(job_id);
 CREATE INDEX IF NOT EXISTS idx_export_jobs_job_id ON export_jobs(job_id);
 """
@@ -78,7 +93,45 @@ def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as connection:
         connection.executescript(SCHEMA)
+        _sync_jobs_table_schema(connection)
         connection.commit()
+
+
+def _sync_jobs_table_schema(connection: sqlite3.Connection) -> None:
+    """Keep existing jobs tables aligned with the latest schema."""
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(jobs)")
+    }
+    required_columns: dict[str, str] = {
+        "share_link": "TEXT",
+        "via": "TEXT",
+        "thumbnail": "TEXT",
+        "posted_at_text": "TEXT",
+        "schedule_type": "TEXT",
+        "work_from_home": "INTEGER",
+        "qualifications_text": "TEXT",
+        "raw_job_json": "TEXT",
+        "apply_options_json": "TEXT",
+        "extensions_json": "TEXT",
+        "detected_extensions_json": "TEXT",
+        "job_highlights_json": "TEXT",
+    }
+
+    for column_name, column_type in required_columns.items():
+        if column_name in columns:
+            continue
+        connection.execute(
+            f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}"
+        )
+
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_source_job_id
+        ON jobs(source_job_id)
+        WHERE source_job_id IS NOT NULL
+        """
+    )
 
 
 @contextmanager
@@ -125,4 +178,3 @@ def log_raw_request(
         ),
     )
     return int(cursor.lastrowid)
-

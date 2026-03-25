@@ -1,13 +1,33 @@
 from __future__ import annotations
 
-from app.config import load_settings
-from app.db import init_db
+from pathlib import Path
+
+from config import WorkerPaths, initialize_config
+from db import init_db
+
+
+def _default_paths(project_root: Path) -> WorkerPaths:
+    config_dir = project_root / "config"
+    return WorkerPaths(
+        db_path=config_dir / "jobs.db",
+        log_path=config_dir / "worker.log",
+        queries_path=config_dir / "queries.json",
+        ideal_job_path=config_dir / "ideal_job.txt",
+        resume_path=config_dir / "resume.txt",
+        env_path=config_dir / ".env",
+    )
 
 
 def main() -> None:
-    settings = load_settings()
-    init_db(settings.db_path)
-    print(f"Database initialized at {settings.db_path}")
+    #project_root = Path(__file__).resolve().parent.parent
+
+    project_root = Path("/Users/noah/REPOS/job-search-engine")
+    config = initialize_config(_default_paths(project_root))
+    init_db(config.paths.db_path)
+
+    print(config.queries)
+    
+
 
 
 if __name__ == "__main__":
