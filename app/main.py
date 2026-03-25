@@ -1,3 +1,5 @@
+"""Small local entrypoint for config/bootstrap sanity checks."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,6 +9,7 @@ from db import init_db
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
+    """Build default local profile paths."""
     config_dir = project_root / "config"
     return WorkerPaths(
         db_path=config_dir / "jobs.db",
@@ -19,6 +22,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
 
 
 def main() -> None:
+    """Initialize config + DB for manual local smoke runs."""
     #project_root = Path(__file__).resolve().parent.parent
 
     project_root = Path("/Users/noah/REPOS/job-search-engine")

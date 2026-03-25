@@ -1,14 +1,17 @@
+"""Search execution flow: fetch pages, archive raw payloads, upsert jobs."""
+
 from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
 
 from app.config import QueryConfig, WorkerConfig
-from app.db import get_connection, init_db, log_raw_request
+from app.db import get_connection, init_db, log_raw_request, utc_now_iso
 from app.jobs import upsert_jobs_from_payload
 from app.serpapi import SerpApiService
 
 
+# Lightweight run summaries returned to scripts/callers.
 @dataclass(frozen=True)
 class QueryRunSummary:
     query_name: str
@@ -27,6 +30,7 @@ class SearchRunSummary:
 
 
 def run_enabled_queries(config: WorkerConfig) -> SearchRunSummary:
+    """Run all enabled queries and persist both raw + normalized job data."""
     enabled_queries = [query for query in config.queries if query.enabled]
     if not enabled_queries:
         raise ValueError("No enabled queries were found in config/queries.json.")
@@ -61,6 +65,7 @@ def _run_single_query(
     connection: sqlite3.Connection,
     query: QueryConfig,
 ) -> QueryRunSummary:
+    """Execute one query across pages and persist each returned page."""
     pages = service.search(
         query.request,
         max_pages=query.max_pages,
@@ -70,15 +75,21 @@ def _run_single_query(
     stored_request_ids: list[int] = []
     jobs_upserted = 0
     for page in pages:
+        requested_at = utc_now_iso()
         request_id = log_raw_request(
             connection,
             query_name=page.query_name,
             query_params=page.request,
             response_payload=page.payload,
             response_status=page.response_status,
+            requested_at=requested_at,
         )
         stored_request_ids.append(request_id)
-        jobs_upserted += upsert_jobs_from_payload(connection, page.payload)
+        jobs_upserted += upsert_jobs_from_payload(
+            connection,
+            page.payload,
+            anchor_requested_at_utc=requested_at,
+        )
 
     return QueryRunSummary(
         query_name=query.name,

@@ -1,3 +1,5 @@
+"""Worker bootstrap: path resolution, config loading, and validation."""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
+# Public config contracts used by scripts/orchestrator code.
 @dataclass(frozen=True)
 class WorkerPaths:
     """Filesystem inputs supplied by the orchestrator at worker startup."""
@@ -39,6 +42,7 @@ class WorkerConfig:
     ideal_job_text: str
 
 
+# Bootstrap entrypoint used by all worker scripts.
 def initialize_config(paths: WorkerPaths) -> WorkerConfig:
     """Load + validate all worker config inputs and return one runtime object."""
     resolved_paths = _resolve_paths(paths)
@@ -64,7 +68,9 @@ def initialize_config(paths: WorkerPaths) -> WorkerConfig:
     )
 
 
+# Internal helpers for path/env/file parsing.
 def _resolve_paths(paths: WorkerPaths) -> WorkerPaths:
+    """Normalize configured paths to absolute paths."""
     return WorkerPaths(
         db_path=paths.db_path.expanduser().resolve(),
         log_path=paths.log_path.expanduser().resolve(),
@@ -76,6 +82,7 @@ def _resolve_paths(paths: WorkerPaths) -> WorkerPaths:
 
 
 def _validate_paths(paths: WorkerPaths) -> None:
+    """Validate required input files and ensure output directories exist."""
     required_files = [
         ("queries", paths.queries_path),
         ("ideal job", paths.ideal_job_path),
@@ -94,6 +101,7 @@ def _validate_paths(paths: WorkerPaths) -> None:
 
 
 def _load_env_file(path: Path) -> None:
+    """Load KEY=VALUE lines into process env without overriding existing vars."""
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -106,6 +114,7 @@ def _load_env_file(path: Path) -> None:
 
 
 def _read_nonempty_text(path: Path, label: str) -> str:
+    """Read a text file and enforce non-empty content."""
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         raise ValueError(f"{label} text file is empty: {path}")
@@ -113,6 +122,7 @@ def _read_nonempty_text(path: Path, label: str) -> str:
 
 
 def _load_queries(path: Path) -> list[QueryConfig]:
+    """Parse and validate query configuration entries."""
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 

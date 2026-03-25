@@ -1,3 +1,5 @@
+"""Initialize/sync the local SQLite schema for the current profile."""
+
 from pathlib import Path
 import sys
 
@@ -10,6 +12,7 @@ from app.db import init_db
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
+    """Build default single-profile path mapping for local runs."""
     config_dir = project_root / "config"
     return WorkerPaths(
         db_path=config_dir / "jobs.db",
@@ -22,6 +25,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
 
 
 def main() -> None:
+    """Entrypoint for creating/upgrading the local jobs database."""
     config = initialize_config(_default_paths(PROJECT_ROOT))
     init_db(config.paths.db_path)
     print(f"Initialized database at {config.paths.db_path}")

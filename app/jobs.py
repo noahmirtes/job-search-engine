@@ -1,3 +1,5 @@
+"""Job normalization and upsert logic shared by live ingest and backfill."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,8 +9,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.db import utc_now_iso
+from app.posting_date import derive_posted_date
 
 
+# Normalized in-memory job shape before DB write.
 @dataclass(frozen=True)
 class JobRecord:
     source_job_id: str | None
@@ -36,7 +40,10 @@ class JobRecord:
 def upsert_jobs_from_payload(
     connection: sqlite3.Connection,
     payload: dict[str, Any],
+    *,
+    anchor_requested_at_utc: str,
 ) -> int:
+    """Parse payload jobs_results and upsert each job into the jobs table."""
     jobs_results = payload.get("jobs_results")
     if not isinstance(jobs_results, list):
         return 0
@@ -45,7 +52,10 @@ def upsert_jobs_from_payload(
     for raw_job in jobs_results:
         if not isinstance(raw_job, dict):
             continue
-        record = _to_job_record(raw_job)
+        record = _to_job_record(
+            raw_job,
+            anchor_requested_at_utc=anchor_requested_at_utc,
+        )
         _upsert_job(connection, record)
         processed_count += 1
 
@@ -55,14 +65,26 @@ def upsert_jobs_from_payload(
 def upsert_jobs_from_raw_response_json(
     connection: sqlite3.Connection,
     response_json: str,
+    *,
+    anchor_requested_at_utc: str,
 ) -> int:
+    """Decode raw response JSON and upsert contained jobs."""
     payload = json.loads(response_json)
     if not isinstance(payload, dict):
         return 0
-    return upsert_jobs_from_payload(connection, payload)
+    return upsert_jobs_from_payload(
+        connection,
+        payload,
+        anchor_requested_at_utc=anchor_requested_at_utc,
+    )
 
 
-def _to_job_record(raw_job: dict[str, Any]) -> JobRecord:
+def _to_job_record(
+    raw_job: dict[str, Any],
+    *,
+    anchor_requested_at_utc: str,
+) -> JobRecord:
+    """Map a raw SerpApi job object into the normalized JobRecord shape."""
     source_job_id = _as_text(raw_job.get("job_id"))
     title = _as_text(raw_job.get("title")) or "Unknown title"
     company = _as_text(raw_job.get("company_name")) or "Unknown company"
@@ -103,6 +125,8 @@ def _to_job_record(raw_job: dict[str, Any]) -> JobRecord:
         share_link=share_link,
     )
 
+    date_posted = derive_posted_date(posted_at_text, anchor_requested_at_utc)
+
     return JobRecord(
         source_job_id=source_job_id,
         title=title,
@@ -122,12 +146,13 @@ def _to_job_record(raw_job: dict[str, Any]) -> JobRecord:
         extensions_json=json.dumps(extensions, sort_keys=True),
         detected_extensions_json=json.dumps(detected_extensions, sort_keys=True),
         job_highlights_json=json.dumps(job_highlights, sort_keys=True),
-        date_posted=posted_at_text,
+        date_posted=date_posted,
         normalized_hash=normalized_hash,
     )
 
 
 def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
+    """Insert or update a job record using source id/hash identity."""
     existing_job_id = _find_existing_job_id(
         connection=connection,
         source_job_id=record.source_job_id,
@@ -250,6 +275,7 @@ def _find_existing_job_id(
     source_job_id: str | None,
     normalized_hash: str,
 ) -> int | None:
+    """Find existing job by source id first, then fallback normalized hash."""
     if source_job_id:
         row = connection.execute(
             "SELECT id FROM jobs WHERE source_job_id = ? LIMIT 1",
@@ -276,6 +302,7 @@ def _build_normalized_hash(
     apply_url: str | None,
     share_link: str | None,
 ) -> str:
+    """Build stable dedupe hash from source id or normalized fallback fields."""
     if source_job_id:
         identity = f"id:{source_job_id.strip().lower()}"
     else:
@@ -292,6 +319,7 @@ def _build_normalized_hash(
 
 
 def _first_apply_url(apply_options: list[Any]) -> str | None:
+    """Pick the first valid apply option URL."""
     for option in apply_options:
         if not isinstance(option, dict):
             continue
@@ -302,6 +330,7 @@ def _first_apply_url(apply_options: list[Any]) -> str | None:
 
 
 def _as_text(value: Any) -> str | None:
+    """Normalize optional text values."""
     if isinstance(value, str):
         text = value.strip()
         return text or None
@@ -309,6 +338,7 @@ def _as_text(value: Any) -> str | None:
 
 
 def _as_int_bool(value: Any) -> int | None:
+    """Map bool to SQLite-friendly 1/0 while preserving missing values."""
     if isinstance(value, bool):
         return 1 if value else 0
     return None

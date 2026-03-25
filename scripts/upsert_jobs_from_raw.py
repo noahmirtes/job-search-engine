@@ -1,3 +1,5 @@
+"""Backfill jobs table from already stored raw_requests payloads."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,6 +15,7 @@ from app.jobs import upsert_jobs_from_raw_response_json
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
+    """Build default single-profile path mapping for local runs."""
     config_dir = project_root / "config"
     return WorkerPaths(
         db_path=config_dir / "jobs.db",
@@ -25,6 +28,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
 
 
 def main() -> None:
+    """Replay raw requests into jobs using shared parse/hash/upsert logic."""
     config = initialize_config(_default_paths(PROJECT_ROOT))
     init_db(config.paths.db_path)
 
@@ -33,14 +37,17 @@ def main() -> None:
 
     with get_connection(config.paths.db_path) as connection:
         rows = connection.execute(
-            "SELECT id, response_json FROM raw_requests ORDER BY id"
+            "SELECT id, response_json, requested_at FROM raw_requests "
+            "ORDER BY requested_at ASC, id ASC"
         ).fetchall()
 
         for row in rows:
             response_json = row["response_json"]
+            requested_at = row["requested_at"]
             total_jobs_upserted += upsert_jobs_from_raw_response_json(
                 connection,
                 response_json,
+                anchor_requested_at_utc=requested_at,
             )
             raw_requests_processed += 1
 
