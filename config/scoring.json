@@ -1,0 +1,52 @@
+{
+  "version": "v1",
+  "llm": {
+    "provider": "ollama",
+    "model": "llama3.2",
+    "max_retries": 3
+  },
+  
+  "report": {
+    "threshold": 0,
+    "include_all_jobs_list": true
+  },
+
+
+  "rules": [
+    {
+      "name": "junior_position",
+      "prompt": "Is this a junior or entry-level software development role?",
+      "score": 50,
+      "result_options": ["true", "false"],
+      "trigger_result": "true"
+    },
+    {
+      "name": "senior_position",
+      "prompt": "Is this a senior, staff, principal, or lead software development role?",
+      "score": -40,
+      "result_options": ["true", "false"],
+      "trigger_result": "true"
+    },
+    {
+      "name": "backend_role",
+      "prompt": "Is this primarily a backend software development role?",
+      "score": 20,
+      "result_options": ["true", "false"],
+      "trigger_result": "true"
+    },
+    {
+      "name": "python_preferred",
+      "prompt": "Does this role primarily use or require Python?",
+      "score": 15,
+      "result_options": ["true", "false"],
+      "trigger_result": "true"
+    },
+    {
+      "name": "frontend_heavy",
+      "prompt": "Is this primarily a frontend-focused role?",
+      "score": -15,
+      "result_options": ["true", "false"],
+      "trigger_result": "true"
+    }
+  ]
+}

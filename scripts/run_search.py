@@ -1,9 +1,8 @@
 """Run enabled query ingestion: fetch pages, archive raw, upsert jobs."""
 
 from __future__ import annotations
-
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -20,6 +19,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
         db_path=config_dir / "jobs.db",
         log_path=config_dir / "worker.log",
         queries_path=config_dir / "queries.json",
+        scoring_path=config_dir / "scoring.json",
         ideal_job_path=config_dir / "ideal_job.txt",
         resume_path=config_dir / "resume.txt",
         env_path=config_dir / ".env",

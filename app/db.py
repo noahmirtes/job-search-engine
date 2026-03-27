@@ -57,6 +57,12 @@ CREATE TABLE IF NOT EXISTS job_scores (
     resume_embedding_score REAL,
     ideal_job_embedding_score REAL,
     total_score REAL NOT NULL,
+    llm_provider TEXT,
+    llm_model TEXT,
+    feature_results_json TEXT,
+    breakdown_json TEXT,
+    scoring_status TEXT NOT NULL DEFAULT 'ok',
+    scoring_error TEXT,
     scoring_version TEXT NOT NULL,
     scored_at TEXT NOT NULL,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
@@ -99,6 +105,7 @@ def init_db(db_path: Path) -> None:
     with sqlite3.connect(db_path) as connection:
         connection.executescript(SCHEMA)
         _sync_jobs_table_schema(connection)
+        _sync_job_scores_table_schema(connection)
         connection.commit()
 
 
@@ -137,6 +144,29 @@ def _sync_jobs_table_schema(connection: sqlite3.Connection) -> None:
         WHERE source_job_id IS NOT NULL
         """
     )
+
+
+def _sync_job_scores_table_schema(connection: sqlite3.Connection) -> None:
+    """Keep existing job_scores tables aligned with the latest schema."""
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(job_scores)")
+    }
+    required_columns: dict[str, str] = {
+        "llm_provider": "TEXT",
+        "llm_model": "TEXT",
+        "feature_results_json": "TEXT",
+        "breakdown_json": "TEXT",
+        "scoring_status": "TEXT NOT NULL DEFAULT 'ok'",
+        "scoring_error": "TEXT",
+    }
+
+    for column_name, column_type in required_columns.items():
+        if column_name in columns:
+            continue
+        connection.execute(
+            f"ALTER TABLE job_scores ADD COLUMN {column_name} {column_type}"
+        )
 
 
 @contextmanager
