@@ -22,6 +22,7 @@ class WorkerPaths:
     ideal_job_path: Path
     resume_path: Path
     env_path: Path
+    report_export_dir: Path
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,7 @@ def _resolve_paths(paths: WorkerPaths) -> WorkerPaths:
         ideal_job_path=paths.ideal_job_path.expanduser().resolve(),
         resume_path=paths.resume_path.expanduser().resolve(),
         env_path=paths.env_path.expanduser().resolve(),
+        report_export_dir=paths.report_export_dir.expanduser().resolve(),
     )
 
 
@@ -138,6 +140,7 @@ def _validate_paths(paths: WorkerPaths) -> None:
 
     paths.db_path.parent.mkdir(parents=True, exist_ok=True)
     paths.log_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.report_export_dir.mkdir(parents=True, exist_ok=True)
 
 
 def _load_env_file(path: Path) -> None:

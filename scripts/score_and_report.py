@@ -1,9 +1,9 @@
-"""Backfill jobs table from already stored raw_requests payloads."""
+"""Generate the export workbook from scored jobs in the local database."""
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -11,7 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.config import WorkerPaths, initialize_config
 from app.db import get_connection, init_db
-from app.jobs import upsert_jobs_from_raw_response_json
+from app.reporting import generate_report
+from app.scoring import run_job_scoring
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
@@ -25,36 +26,29 @@ def _default_paths(project_root: Path) -> WorkerPaths:
         ideal_job_path=config_dir / "ideal_job.txt",
         resume_path=config_dir / "resume.txt",
         env_path=config_dir / ".env",
-        report_export_dir=config_dir / "reports",
+        report_export_dir=project_root / "reports",
     )
 
 
 def main() -> None:
-    """Replay raw requests into jobs using shared parse/hash/upsert logic."""
+    """Entrypoint for building one report workbook and storing export metadata."""
     config = initialize_config(_default_paths(PROJECT_ROOT))
     init_db(config.paths.db_path)
-
-    raw_requests_processed = 0
-    total_jobs_upserted = 0
-
+    
+    # score jobs
     with get_connection(config.paths.db_path) as connection:
-        rows = connection.execute(
-            "SELECT id, response_json, requested_at FROM raw_requests "
-            "ORDER BY requested_at ASC, id ASC"
-        ).fetchall()
+        summary = run_job_scoring(connection, config, only_unscored=False)
+    
+    # get connection
+    with get_connection(config.paths.db_path) as connection:
+        summary = generate_report(connection, config)
 
-        for row in rows:
-            response_json = row["response_json"]
-            requested_at = row["requested_at"]
-            total_jobs_upserted += upsert_jobs_from_raw_response_json(
-                connection,
-                response_json,
-                anchor_requested_at_utc=requested_at,
-            )
-            raw_requests_processed += 1
-
-    print(f"Raw requests processed: {raw_requests_processed}")
-    print(f"Total jobs upserted: {total_jobs_upserted}")
+    print(f"Export id: {summary.export_id}")
+    print(f"Report path: {summary.export_path}")
+    print(f"Rows in 'new' tab: {summary.new_count}")
+    print(f"Rows in 'all' tab: {summary.all_count}")
+    if config.scoring_config.report.include_all_jobs_list:
+        print(f"Rows in 'all_jobs_list' tab: {summary.all_jobs_list_count}")
 
 
 if __name__ == "__main__":

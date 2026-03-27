@@ -2,7 +2,7 @@
   "version": "v1",
   "llm": {
     "provider": "ollama",
-    "model": "llama3.2",
+    "model": "gemma3:4b",
     "max_retries": 3
   },
   
@@ -11,19 +11,11 @@
     "include_all_jobs_list": true
   },
 
-
   "rules": [
     {
       "name": "junior_position",
-      "prompt": "Is this a junior or entry-level software development role?",
+      "prompt": "This a junior or entry-level software development role?",
       "score": 50,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "senior_position",
-      "prompt": "Is this a senior, staff, principal, or lead software development role?",
-      "score": -40,
       "result_options": ["true", "false"],
       "trigger_result": "true"
     },
@@ -42,11 +34,16 @@
       "trigger_result": "true"
     },
     {
-      "name": "frontend_heavy",
-      "prompt": "Is this primarily a frontend-focused role?",
-      "score": -15,
+      "name": "senior_position",
+      "prompt": "Is this a senior, staff, principal, or lead software development role?",
+      "score": -100,
       "result_options": ["true", "false"],
       "trigger_result": "true"
     }
+  ],
+  
+  "inactive_rules" : [
+    
   ]
+
 }
