@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-
 from ollama import Client
 
 
@@ -48,6 +47,10 @@ def classify_rule_result(
                 timeout_seconds=timeout_seconds,
             )
             parsed_result = _extract_result(raw_response)
+            print("\n")
+            print(job_text[:150])
+            print(raw_response)
+
             normalized_result = _normalize_option(parsed_result)
             if normalized_result in normalized_options:
                 return normalized_result
@@ -70,14 +73,22 @@ def _build_classification_prompt(
     result_options: list[str],
     job_text: str,
 ) -> str:
-    options_text = ", ".join(result_options)
+    options_text = ", ".join(f'"{o}"' for o in result_options)
     return (
-        "You are a strict classifier.\n"
-        f"Return one result from: {options_text}\n"
-        "Respond ONLY as JSON in this exact format:\n"
-        '{"result":"<one allowed option>"}\n\n'
+        "You are a closed-set classification system.\n"
+        f"Allowed result values: [{options_text}]\n"
+        "You must choose exactly one allowed result value.\n"
+        "Do not invent new values.\n"
+        "Do not explain your reasoning.\n"
+        "Do not summarize the job.\n"
+        "Do not return labels from the question.\n"
+        "Return only valid JSON matching this exact schema:\n"
+        '{"result":"<allowed value>"}\n'
+        "The value of \"result\" must be exactly one of the allowed result values.\n\n"
         f"Question:\n{question}\n\n"
-        f"Job:\n{job_text}\n"
+        f"Job text:\n{job_text}\n\n"
+        "The value of \"result\" must be exactly one of the allowed result values.\n\n"
+        f"Question:\n{question}\n\n"
     )
 
 

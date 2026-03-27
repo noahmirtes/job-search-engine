@@ -23,6 +23,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
         ideal_job_path=config_dir / "ideal_job.txt",
         resume_path=config_dir / "resume.txt",
         env_path=config_dir / ".env",
+        report_export_dir=config_dir / "reports",
     )
 
 

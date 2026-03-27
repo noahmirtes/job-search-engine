@@ -145,7 +145,7 @@ def _load_jobs_for_scoring(
 def _build_job_text(row: sqlite3.Row) -> str:
     """Build compact prompt context from the normalized jobs table fields."""
     sections = [
-        f"Title: {_safe_text(row['title'])}",
+        f"Job Title: {_safe_text(row['title'])}",
         f"Company: {_safe_text(row['company'])}",
         f"Location: {_safe_text(row['location'])}",
         f"Description: {_safe_text(row['description'])}",

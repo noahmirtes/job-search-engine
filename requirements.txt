@@ -1,4 +1,5 @@
 ollama
+openpyxl
 pandas
 requests
 serpapi
