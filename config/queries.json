@@ -13,6 +13,7 @@
       "gl": "us"
     }
   },
+
   {
     "name": "python_backend_remote_us",
     "enabled": false,
@@ -27,12 +28,5 @@
       "gl": "us"
     }
   }
-
-
-  
-
-
-
-
 
 ]

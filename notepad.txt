@@ -80,6 +80,54 @@ Job Highlights contains the content from the description parsed out into titles 
 
 So now, I'd like for you to take a look at the JSON of the raw_request_example and see the format that this data lives in and then compare that against what I just said and then we can draft up a plan for the job table schema and how we're going to store everything
 
+# ----------------------------------------------------- #
+
+
+I think we should look into just the algorithmic/keyword scoring first and then look at the ollama/embedding route after that.
+
+We've got 27 jobs in the database so we've got stuff to test against. So, now that we're here I think we should determine exactly how we want to go about scoring. First off, it occurs to me that it could be helpful to have another config file that lists keywords that we want to trigger. For example, I could flag 'backend, python' or really any other word or phrase. These could give small bumps/boosts. Maybe I could store them in .txt or a .csv even?
+
+Anyway, setting that aside for now, we have to figure out how we want everything else to behave first. What are the things we want to filter/score by?
+
+After some thought, here's my ideal setup:
+There's maybe some kind of csv file that specifies filter scoring rules and their triggers.
+This way the scoring stays deterministic, but also remains flexible and easy to modify and iterate.
+Additionally, I want to make sure this is usable for the other people who im setting up in this. Not everyone is going to be looking for 'junior developer' positions so I wouldn't want to, for example, program in a seniority check for everyone. Even for me, I may want to change my search criteria during the hunt or perhaps if I use this pipeline again years down the line.
+**note that this scoring could work in the negative as well. For example, I could set it so that if it's a senior position, it gets minus a bunch of points, or if it has certain technologies I specifically want to avoid.
+
+The main issue I see really remains how we determine what get's checked and how.
+So let's say I want to significantly boost junior positions
+keyword_trigger: junior, software developer I, . . .
+Search field: title
+Score: +30
+
+I could set an infinite number of rules and scoring values.
+
+This could work I think. It would take a bit of work to set up a particular scoring rule card, but it would be pretty solid.
+
+I can see that it would be really necessary to have all the keyword variations though. If I didnt have an iteration of a junior position listed in the trigger list, then it would not get that +30 score and be devalued even if it's a perfect fit for me. Another possibility is that it's a junior position, but it doesnt say "junior" or anything like that in the title. Instead, maybe it's contextual and you can really only get that info from reading the description.
+
+Slowly but surely, it's starting to look to me like this might be a problem better suited to an LLM. I'm already going to use ollama so that's not a concern... but at the same time, setting up a ChatGPT api for this would be pretty effective.
+
+I would still like a scoring system though, I see that as a REALLY strong proposition for this system. Being able to rank and sort all the jobs that the system found sounds like a really solid option to me.
+
+I think I should stop the gear turning here and turn it over to you for some external feedback and opinion.
+
+# ----------------------------------------------------- #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
