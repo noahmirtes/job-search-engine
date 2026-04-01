@@ -34,6 +34,8 @@ class JobRecord:
     detected_extensions_json: str
     job_highlights_json: str
     date_posted: str | None
+    is_scorable: int
+    scorable_missing_fields_json: str
     normalized_hash: str
 
 
@@ -126,6 +128,13 @@ def _to_job_record(
     )
 
     date_posted = derive_posted_date(posted_at_text, anchor_requested_at_utc)
+    missing_fields = _compute_scorable_missing_fields(
+        title=title,
+        company=company,
+        description=description,
+        apply_url=apply_url,
+    )
+    is_scorable = 1 if not missing_fields else 0
 
     return JobRecord(
         source_job_id=source_job_id,
@@ -147,6 +156,8 @@ def _to_job_record(
         detected_extensions_json=json.dumps(detected_extensions, sort_keys=True),
         job_highlights_json=json.dumps(job_highlights, sort_keys=True),
         date_posted=date_posted,
+        is_scorable=is_scorable,
+        scorable_missing_fields_json=json.dumps(missing_fields, sort_keys=True),
         normalized_hash=normalized_hash,
     )
 
@@ -183,10 +194,12 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
                 detected_extensions_json,
                 job_highlights_json,
                 date_posted,
+                is_scorable,
+                scorable_missing_fields_json,
                 normalized_hash,
                 first_seen_at,
                 last_seen_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.source_job_id,
@@ -208,6 +221,8 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
                 record.detected_extensions_json,
                 record.job_highlights_json,
                 record.date_posted,
+                record.is_scorable,
+                record.scorable_missing_fields_json,
                 record.normalized_hash,
                 now,
                 now,
@@ -238,6 +253,8 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
             detected_extensions_json = ?,
             job_highlights_json = ?,
             date_posted = ?,
+            is_scorable = ?,
+            scorable_missing_fields_json = ?,
             normalized_hash = ?,
             last_seen_at = ?
         WHERE id = ?
@@ -262,6 +279,8 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
             record.detected_extensions_json,
             record.job_highlights_json,
             record.date_posted,
+            record.is_scorable,
+            record.scorable_missing_fields_json,
             record.normalized_hash,
             now,
             existing_job_id,
@@ -342,3 +361,61 @@ def _as_int_bool(value: Any) -> int | None:
     if isinstance(value, bool):
         return 1 if value else 0
     return None
+
+
+def recompute_jobs_scorability(connection: sqlite3.Connection) -> int:
+    """Recompute is_scorable fields for all existing jobs rows."""
+    rows = connection.execute(
+        """
+        SELECT id, title, company, description, apply_url
+        FROM jobs
+        ORDER BY id ASC
+        """
+    ).fetchall()
+
+    updates: list[tuple[int, str, int]] = []
+    for row in rows:
+        row_id = int(row["id"] if isinstance(row, sqlite3.Row) else row[0])
+        title = row["title"] if isinstance(row, sqlite3.Row) else row[1]
+        company = row["company"] if isinstance(row, sqlite3.Row) else row[2]
+        description = row["description"] if isinstance(row, sqlite3.Row) else row[3]
+        apply_url = row["apply_url"] if isinstance(row, sqlite3.Row) else row[4]
+
+        missing_fields = _compute_scorable_missing_fields(
+            title=_as_text(title) or "",
+            company=_as_text(company) or "",
+            description=_as_text(description),
+            apply_url=_as_text(apply_url),
+        )
+        is_scorable = 1 if not missing_fields else 0
+        updates.append((is_scorable, json.dumps(missing_fields, sort_keys=True), row_id))
+
+    connection.executemany(
+        """
+        UPDATE jobs
+        SET is_scorable = ?, scorable_missing_fields_json = ?
+        WHERE id = ?
+        """,
+        updates,
+    )
+    return len(updates)
+
+
+def _compute_scorable_missing_fields(
+    *,
+    title: str,
+    company: str,
+    description: str | None,
+    apply_url: str | None,
+) -> list[str]:
+    """Return deterministic missing-field codes for scoring eligibility."""
+    missing_fields: list[str] = []
+    if not title.strip():
+        missing_fields.append("missing_title")
+    if not company.strip():
+        missing_fields.append("missing_company")
+    if not description or not description.strip():
+        missing_fields.append("missing_description")
+    if not apply_url or not apply_url.strip():
+        missing_fields.append("missing_apply_link")
+    return missing_fields

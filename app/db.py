@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     detected_extensions_json TEXT,
     job_highlights_json TEXT,
     date_posted TEXT,
+    is_scorable INTEGER NOT NULL DEFAULT 0,
+    scorable_missing_fields_json TEXT NOT NULL DEFAULT '[]',
     normalized_hash TEXT NOT NULL UNIQUE,
     first_seen_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL
@@ -128,6 +130,8 @@ def _sync_jobs_table_schema(connection: sqlite3.Connection) -> None:
         "extensions_json": "TEXT",
         "detected_extensions_json": "TEXT",
         "job_highlights_json": "TEXT",
+        "is_scorable": "INTEGER NOT NULL DEFAULT 0",
+        "scorable_missing_fields_json": "TEXT NOT NULL DEFAULT '[]'",
     }
 
     for column_name, column_type in required_columns.items():

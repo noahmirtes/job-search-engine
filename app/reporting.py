@@ -114,6 +114,7 @@ def _fetch_scored_rows(
         WHERE job_scores.scoring_version = ?
           AND job_scores.scoring_status = 'ok'
           AND job_scores.total_score >= ?
+          AND jobs.is_scorable = 1
         ORDER BY job_scores.total_score DESC, jobs.last_seen_at DESC, jobs.id DESC
         """,
         (scoring_version, threshold),
@@ -150,6 +151,7 @@ def _fetch_all_jobs_rows(
             ON job_scores.job_id = jobs.id
            AND job_scores.scoring_version = ?
            AND job_scores.scoring_status = 'ok'
+        WHERE jobs.is_scorable = 1
         ORDER BY
             CASE WHEN job_scores.total_score IS NULL THEN 1 ELSE 0 END ASC,
             job_scores.total_score DESC,

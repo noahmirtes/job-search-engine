@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 import serpapi
 
@@ -23,6 +23,19 @@ class SearchPage:
     response_status: int = 200
 
 
+@dataclass(frozen=True)
+class SearchAttempt:
+    """One API attempt, including explicit error metadata on failures."""
+
+    query_name: str
+    page_number: int
+    request: dict[str, Any]
+    payload: dict[str, Any]
+    response_status: int
+    is_error: bool
+    error_message: str | None = None
+
+
 class SerpApiService:
     """Service wrapper that handles Google Jobs paging tokens."""
     def __init__(self, api_key: str, *, timeout: int = 30) -> None:
@@ -34,12 +47,11 @@ class SerpApiService:
         *,
         max_pages: int = 1,
         query_name: str = "query",
-    ) -> list[SearchPage]:
-        """Fetch up to max_pages pages for a query request."""
+    ) -> Iterator[SearchAttempt]:
+        """Yield one attempt at a time so callers can persist each result immediately."""
         base_request = dict(request)
         base_request.setdefault("engine", "google_jobs")
 
-        pages: list[SearchPage] = []
         next_page_token: str | None = None
 
         for page_number in range(1, max_pages + 1):
@@ -47,37 +59,93 @@ class SerpApiService:
             if next_page_token:
                 page_request["next_page_token"] = next_page_token
 
-            payload = self._search_once(page_request)
-            pages.append(
-                SearchPage(
-                    query_name=query_name,
-                    page_number=page_number,
-                    request=page_request,
-                    payload=payload,
-                )
+            attempt = self._search_once(
+                query_name=query_name,
+                page_number=page_number,
+                request=page_request,
             )
+            yield attempt
 
-            next_page_token = extract_next_page_token(payload)
+            if attempt.is_error:
+                break
+
+            next_page_token = extract_next_page_token(attempt.payload)
             if not next_page_token:
                 break
 
-        return pages
-
-    def _search_once(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Execute one API call and validate payload shape."""
+    def _search_once(
+        self,
+        *,
+        query_name: str,
+        page_number: int,
+        request: dict[str, Any],
+    ) -> SearchAttempt:
+        """Execute one API call and always return a normalized success/error attempt."""
         try:
             results = self.client.search(request)
         except Exception as exc:
-            raise SerpApiError(f"SerpApi request failed: {exc}") from exc
+            return _build_error_attempt(
+                query_name=query_name,
+                page_number=page_number,
+                request=request,
+                response_status=502,
+                error_message=f"SerpApi request failed: {exc}",
+                error_stage="request",
+            )
 
         if not isinstance(results, serpapi.SerpResults):
-            raise SerpApiError("SerpApi returned a non-JSON response.")
+            return _build_error_attempt(
+                query_name=query_name,
+                page_number=page_number,
+                request=request,
+                response_status=502,
+                error_message="SerpApi returned a non-JSON response.",
+                error_stage="response_type",
+            )
 
-        payload = results.as_dict()
+        try:
+            payload = results.as_dict()
+        except Exception as exc:
+            return _build_error_attempt(
+                query_name=query_name,
+                page_number=page_number,
+                request=request,
+                response_status=502,
+                error_message=f"SerpApi payload parsing failed: {exc}",
+                error_stage="payload_parse",
+            )
+
+        if not isinstance(payload, dict):
+            return _build_error_attempt(
+                query_name=query_name,
+                page_number=page_number,
+                request=request,
+                response_status=502,
+                error_message="SerpApi returned payload in unexpected shape.",
+                error_stage="payload_shape",
+            )
+
         if payload.get("error"):
-            raise SerpApiError(str(payload["error"]))
+            error_message = str(payload.get("error"))
+            return SearchAttempt(
+                query_name=query_name,
+                page_number=page_number,
+                request=request,
+                payload=payload,
+                response_status=422,
+                is_error=True,
+                error_message=error_message,
+            )
 
-        return payload
+        return SearchAttempt(
+            query_name=query_name,
+            page_number=page_number,
+            request=request,
+            payload=payload,
+            response_status=200,
+            is_error=False,
+            error_message=None,
+        )
 
 
 def extract_next_page_token(payload: dict[str, Any]) -> str | None:
@@ -91,3 +159,33 @@ def extract_next_page_token(payload: dict[str, Any]) -> str | None:
         return next_page_token
 
     return None
+
+
+def _build_error_attempt(
+    *,
+    query_name: str,
+    page_number: int,
+    request: dict[str, Any],
+    response_status: int,
+    error_message: str,
+    error_stage: str,
+) -> SearchAttempt:
+    """Build a normalized error attempt with synthetic payload metadata."""
+    return SearchAttempt(
+        query_name=query_name,
+        page_number=page_number,
+        request=request,
+        payload=_synthetic_error_payload(error_message, error_stage=error_stage),
+        response_status=response_status,
+        is_error=True,
+        error_message=error_message,
+    )
+
+
+def _synthetic_error_payload(error_message: str, *, error_stage: str) -> dict[str, Any]:
+    """Create a stable payload shape for failures with no upstream JSON payload."""
+    return {
+        "error": error_message,
+        "synthetic_error": True,
+        "error_stage": error_stage,
+    }

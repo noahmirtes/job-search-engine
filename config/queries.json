@@ -1,6 +1,48 @@
 [
   {
-    "name": "backend_remote_us",
+    "name": "junior_software_engineer",
+    "enabled": true,
+    "max_pages": 2,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "junior software engineer",
+      "location": "United States",
+      "ltype": "1",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "entry_level_software_engineer",
+    "enabled": true,
+    "max_pages": 2,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "entry level software engineer",
+      "location": "United States",
+      "ltype": "1",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "software_engineer_i",
+    "enabled": true,
+    "max_pages": 2,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "software engineer I",
+      "location": "United States",
+      "ltype": "1",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "junior_backend_engineer",
     "enabled": true,
     "max_pages": 2,
     "request": {
@@ -13,20 +55,32 @@
       "gl": "us"
     }
   },
-
   {
-    "name": "python_backend_remote_us",
-    "enabled": false,
+    "name": "entry_level_backend_engineer",
+    "enabled": true,
     "max_pages": 1,
     "request": {
       "engine": "google_jobs",
       "google_domain": "google.com",
-      "q": "python backend engineer",
+      "q": "entry level backend engineer",
+      "location": "United States",
+      "ltype": "1",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "junior_backend_developer",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "junior backend developer",
       "location": "United States",
       "ltype": "1",
       "hl": "en",
       "gl": "us"
     }
   }
-
 ]

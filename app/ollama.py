@@ -47,9 +47,6 @@ def classify_rule_result(
                 timeout_seconds=timeout_seconds,
             )
             parsed_result = _extract_result(raw_response)
-            print("\n")
-            print(job_text[:150])
-            print(raw_response)
 
             normalized_result = _normalize_option(parsed_result)
             if normalized_result in normalized_options:

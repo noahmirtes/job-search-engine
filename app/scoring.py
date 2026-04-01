@@ -10,7 +10,7 @@ from typing import Any
 from app.config import WorkerConfig
 from app.db import utc_now_iso
 from app.ollama import classify_rule_result
-
+from time import monotonic # temp import to see how long scoring takes
 
 @dataclass(frozen=True)
 class ScoringRunSummary:
@@ -56,6 +56,7 @@ def run_job_scoring(
 
         try:
             for rule in settings.rules:
+                start_time = monotonic() # temp
                 result = classify_rule_result(
                     model=settings.llm_model,
                     job_text=job_text,
@@ -63,6 +64,8 @@ def run_job_scoring(
                     result_options=rule.result_options,
                     max_retries=settings.llm_max_retries,
                 )
+                print(f"job rule for job_id {job_id} scored in {monotonic() - start_time} sec") # temp
+
                 feature_results[rule.key] = result
 
                 applied_score = rule.score if result == rule.trigger_result_normalized else 0.0
@@ -128,14 +131,18 @@ def _load_jobs_for_scoring(
     """
 
     params: tuple[Any, ...] = ()
+    where_clauses = ["jobs.is_scorable = 1"]
     if only_unscored:
         base_query += """
             LEFT JOIN job_scores
                 ON job_scores.job_id = jobs.id
                 AND job_scores.scoring_version = ?
-            WHERE job_scores.id IS NULL
         """
         params = (scoring_version,)
+        where_clauses.append("job_scores.id IS NULL")
+
+    if where_clauses:
+        base_query += "\nWHERE " + " AND ".join(where_clauses)
 
     base_query += "\nORDER BY jobs.last_seen_at DESC, jobs.id DESC"
     rows = connection.execute(base_query, params).fetchall()
