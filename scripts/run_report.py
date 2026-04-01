@@ -1,7 +1,5 @@
 """Generate the export workbook from scored jobs in the local database."""
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 

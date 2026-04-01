@@ -1,4 +1,6 @@
-"""Run configured LLM scoring against jobs stored in the local DB."""
+"""Recompute scoring eligibility flags for all normalized jobs rows."""
+
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -9,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.config import WorkerPaths, initialize_config
 from app.db import get_connection, init_db
-from app.scoring import run_job_scoring
+from app.jobs import recompute_jobs_scorability
 
 
 def _default_paths(project_root: Path) -> WorkerPaths:
@@ -28,18 +30,14 @@ def _default_paths(project_root: Path) -> WorkerPaths:
 
 
 def main() -> None:
-    """Entrypoint for scoring all jobs with the configured Ollama model."""
+    """Entrypoint for backfilling jobs.is_scorable fields."""
     config = initialize_config(_default_paths(PROJECT_ROOT))
     init_db(config.paths.db_path)
 
     with get_connection(config.paths.db_path) as connection:
-        summary = run_job_scoring(connection, config, only_unscored=False)
+        updated_count = recompute_jobs_scorability(connection)
 
-    print(f"Scoring version: {summary.scoring_version}")
-    print(f"LLM provider/model: {summary.llm_provider}/{summary.llm_model}")
-    print(f"Jobs selected: {summary.jobs_selected}")
-    print(f"Jobs scored (ok): {summary.jobs_scored_ok}")
-    print(f"Jobs failed: {summary.jobs_failed}")
+    print(f"Jobs eligibility recomputed: {updated_count}")
 
 
 if __name__ == "__main__":
