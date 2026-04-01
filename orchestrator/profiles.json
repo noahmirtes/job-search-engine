@@ -1,0 +1,27 @@
+{
+  "smtp": {
+    "sender_email": "noahmirtes@gmail.com",
+    "host": "smtp.gmail.com",
+    "port": 587
+  },
+  "profiles": [
+    {
+      "id": "noah",
+      "enabled": true,
+      "search_every_days": 1,
+      "recipients": [
+        "noahmirtes@gmail.com"
+      ],
+      "send_no_new_email": true,
+      "paths": {
+        "db_path": "config/jobs.db",
+        "queries_path": "config/queries.json",
+        "scoring_path": "config/scoring.json",
+        "resume_path": "config/resume.txt",
+        "ideal_job_path": "config/ideal_job.txt",
+        "env_path": "config/.env",
+        "report_export_dir": "reports"
+      }
+    }
+  ]
+}
