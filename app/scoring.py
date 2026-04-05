@@ -32,8 +32,6 @@ def run_job_scoring(
 ) -> ScoringRunSummary:
     """Score jobs with configured rules and upsert results into job_scores."""
     settings = config.scoring_config
-    if not settings.llm_model:
-        raise ValueError("scoring.json llm.model must be set before running scoring.")
 
     rows = _load_jobs_for_scoring(
         connection,
@@ -53,7 +51,7 @@ def run_job_scoring(
         rule_score_total = 0.0
         status = "ok"
         error_message: str | None = None
-
+        print(f"scoring job_id {job_id}")
         try:
             for rule in settings.rules:
                 start_time = monotonic() # temp
@@ -64,22 +62,29 @@ def run_job_scoring(
                     result_options=rule.result_options,
                     max_retries=settings.llm_max_retries,
                 )
-                print(f"job rule for job_id {job_id} scored in {monotonic() - start_time} sec") # temp
+                print(f"   job rule {rule.name} scored in {monotonic() - start_time} sec") # temp
 
                 feature_results[rule.key] = result
 
-                applied_score = rule.score if result == rule.trigger_result_normalized else 0.0
+                if rule.terminate_options and result in rule.terminate_options:
+                    # double and negative the rules score if its a dealbreaker
+                    applied_score = -(abs(rule.score) * 2) if result == rule.trigger_result_normalized else 0.0
+                else:
+                    applied_score = rule.score if result == rule.trigger_result_normalized else 0.0
+
                 rule_score_total += applied_score
-                breakdown.append(
-                    {
+                breakdown.append({
                         "rule_key": rule.key,
                         "rule_name": rule.name,
                         "result": result,
                         "trigger_result": rule.trigger_result_normalized,
                         "base_score": rule.score,
                         "applied_score": applied_score,
-                    }
-                )
+                    })
+
+                if rule.terminate_options and result in rule.terminate_options:
+                    break # exit rule scoring loop for jobs that hit the terminate option / dealbreaker
+
             jobs_scored_ok += 1
         except Exception as exc:
             status = "failed"

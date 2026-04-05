@@ -45,6 +45,7 @@ class ScoringRuleConfig:
     result_options: list[str]
     trigger_result: str
     trigger_result_normalized: str
+    terminate_options: list
 
 
 @dataclass(frozen=True)
@@ -317,6 +318,12 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
                 f"scoring.json rule '{name}' trigger_result must exist in result_options."
             )
 
+        terminate_options = rule.get("terminate_options")
+        if terminate_options and not isinstance(rule.get("terminate_options"), list):
+            raise ValueError(
+                f"scoring.json role {name} terminate_options must be a list"
+            )
+
         parsed_rules.append(
             ScoringRuleConfig(
                 key=key,
@@ -326,6 +333,7 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
                 result_options=normalized_options,
                 trigger_result=trigger_result,
                 trigger_result_normalized=trigger_result_normalized,
+                terminate_options=terminate_options
             )
         )
 

@@ -9,7 +9,14 @@ from app.config import QueryConfig, WorkerConfig
 from app.db import get_connection, init_db, log_raw_request, utc_now_iso
 from app.jobs import upsert_jobs_from_payload
 from app.serpapi import SerpApiService
-
+"""
+Notes:
+I'm looking at this script and it seems kinda weird to me how the call is happening with the connection integrated inside it
+I think a better way to do this would be to run each request and if it succeeds, add it to a list, if it fails mark it
+and then loop over all the request summaries or whatever and just add those to the database that way. That would simplify
+the logic quite a bit and would make it a bit easier to follow what's going on and why. That also gets rid of that awkward
+except logic that adds a fake row to the db if the request fails
+"""
 
 # Lightweight run summaries returned to scripts/callers.
 @dataclass(frozen=True)

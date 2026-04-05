@@ -7,7 +7,7 @@
   },
 
   "report": {
-    "threshold": 20,
+    "threshold": 0,
     "include_all_jobs_list": true
   },
 
@@ -17,7 +17,24 @@
       "prompt": "Is this clearly a junior, entry-level, associate, new grad, or Software Engineer I role?",
       "score": 60,
       "result_options": ["true", "false"],
-      "trigger_result": "true"
+      "trigger_result": "true",
+      "terminate_options" : ["false"]
+    },
+    {
+      "name": "frontend_primary_penalty",
+      "prompt": "Is this role primarily focused on frontend development (React, UI/UX, styling, etc.)?",
+      "score": -40,
+      "result_options": ["true", "false"],
+      "trigger_result": "true",
+      "terminate_options" : ["true"]
+    },
+    {
+      "name": "experience_too_high",
+      "prompt": "Does this role clearly require more than 3 years of professional experience?",
+      "score": -40,
+      "result_options": ["true", "false"],
+      "trigger_result": "true",
+      "terminate_options" : ["true"]
     },
     {
       "name": "general_software_engineering_role",
@@ -36,28 +53,7 @@
     {
       "name": "python_bonus",
       "prompt": "Does this role use or prefer Python?",
-      "score": 10,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "frontend_primary_penalty",
-      "prompt": "Is this role primarily focused on frontend development (React, UI/UX, styling, etc.)?",
-      "score": -40,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "senior_or_above",
-      "prompt": "Is this a senior, staff, principal, or lead role?",
-      "score": -100,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "experience_too_high",
-      "prompt": "Does this role clearly require more than 3 years of professional experience?",
-      "score": -40,
+      "score": 20,
       "result_options": ["true", "false"],
       "trigger_result": "true"
     },
@@ -112,6 +108,14 @@
       "score": -15,
       "result_options": ["true", "false"],
       "trigger_result": "true"
+    },
+    {
+      "name": "senior_or_above",
+      "prompt": "Is this a senior, staff, principal, or lead role?",
+      "score": -100,
+      "result_options": ["true", "false"],
+      "trigger_result": "true",
+      "terminate_options" : ["false"]
     },
     {
       "name": "devops_or_platform",
