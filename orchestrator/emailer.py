@@ -73,12 +73,12 @@ def _send_email(
     if not recipients:
         raise ValueError("Profile recipients list is empty.")
 
-    username = os.getenv("ORCH_SMTP_USERNAME", "").strip()
-    password = os.getenv("ORCH_SMTP_APP_PASSWORD", "").strip()
+    username = os.getenv("GOOGLE_MAIL_SENDER_ADDRESS", "").strip()
+    password = os.getenv("GOOGLE_MAIL_APP_PASSWORD", "").strip()
     if not username:
-        raise ValueError("Missing ORCH_SMTP_USERNAME in environment.")
+        raise ValueError("Missing GOOGLE_MAIL_SENDER_ADDRESS in environment.")
     if not password:
-        raise ValueError("Missing ORCH_SMTP_APP_PASSWORD in environment.")
+        raise ValueError("Missing GOOGLE_MAIL_APP_PASSWORD in environment.")
 
     message = EmailMessage()
     message["From"] = smtp.sender_email
