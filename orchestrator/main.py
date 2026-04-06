@@ -26,12 +26,13 @@ from orchestrator.pipeline import run_profile_pipeline
 ORCHESTRATOR_DIR = Path(__file__).resolve().parent
 PROFILES_PATH = ORCHESTRATOR_DIR / "profiles.json"
 STATE_PATH = ORCHESTRATOR_DIR / "state.json"
-
+ENV_PATH = ORCHESTRATOR_DIR / ".env"
 
 def main() -> None:
     """Run due profiles with profile-level failure isolation."""
     config = _load_orchestrator_config(PROFILES_PATH)
     state = _load_state(STATE_PATH)
+    _load_env_file(ENV_PATH)
     now_utc = datetime.now(UTC)
 
     due_count = 0
@@ -58,6 +59,7 @@ def main() -> None:
 
         try:
             result = run_profile_pipeline(profile)
+
             run_stamp = _utc_now_iso()
             profile_state["last_search_at"] = run_stamp
             profile_state["last_report_at"] = run_stamp
@@ -307,6 +309,26 @@ def _trim_error(message: str) -> str:
 def _utc_now_iso() -> str:
     """UTC ISO timestamp used for state updates."""
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+
+
+
+
+def _load_env_file(path: Path) -> None:
+    """Load KEY=VALUE lines into process env without overriding existing vars."""
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        os.environ.setdefault(key, value)
+
+
+
 
 
 if __name__ == "__main__":

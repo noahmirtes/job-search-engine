@@ -17,7 +17,7 @@ def run_profile_pipeline(profile: ProfileConfig) -> PipelineResult:
     worker_paths = _build_worker_paths(profile)
     worker_config = initialize_config(worker_paths)
     init_db(worker_config.paths.db_path)
-
+    
     search_summary = run_enabled_queries(worker_config)
 
     with get_connection(worker_config.paths.db_path) as connection:
@@ -35,7 +35,6 @@ def run_profile_pipeline(profile: ProfileConfig) -> PipelineResult:
         jobs_upserted=search_summary.total_jobs_upserted,
         jobs_scored_ok=scoring_summary.jobs_scored_ok,
     )
-
 
 def _build_worker_paths(profile: ProfileConfig) -> WorkerPaths:
     """Map profile paths into the existing worker path contract."""

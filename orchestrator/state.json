@@ -1,3 +1,11 @@
 {
-  "profiles": {}
+  "profiles": {
+    "noah": {
+      "last_email_at": "2026-04-06T22:15:21+00:00",
+      "last_error": null,
+      "last_report_at": "2026-04-06T22:15:19+00:00",
+      "last_run_status": "ok",
+      "last_search_at": "2026-04-06T22:15:19+00:00"
+    }
+  }
 }

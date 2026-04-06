@@ -20,7 +20,7 @@
         "resume_path": "config/resume.txt",
         "ideal_job_path": "config/ideal_job.txt",
         "env_path": "config/.env",
-        "report_export_dir": "reports"
+        "report_export_dir": "config/reports"
       }
     }
   ]
