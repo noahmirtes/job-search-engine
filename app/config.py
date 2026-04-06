@@ -55,6 +55,8 @@ class ScoringConfig:
     version: str
     llm_provider: str
     llm_model: str
+    llm_rule_think: bool
+    llm_fit_think: bool
     llm_max_retries: int
     report: "ScoringReportConfig"
     rules: list[ScoringRuleConfig]
@@ -241,6 +243,18 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
     if not isinstance(max_retries, int) or max_retries < 1:
         raise ValueError("scoring.json llm.max_retries must be an integer >= 1.")
 
+    if "rule_think" not in llm:
+        raise ValueError("scoring.json llm.rule_think is required.")
+    rule_think = llm.get("rule_think")
+    if not isinstance(rule_think, bool):
+        raise ValueError("scoring.json llm.rule_think must be a boolean.")
+
+    if "fit_think" not in llm:
+        raise ValueError("scoring.json llm.fit_think is required.")
+    fit_think = llm.get("fit_think")
+    if not isinstance(fit_think, bool):
+        raise ValueError("scoring.json llm.fit_think must be a boolean.")
+
     report = payload.get("report")
     if not isinstance(report, dict):
         raise ValueError("scoring.json report must be an object.")
@@ -341,6 +355,8 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
         version=version,
         llm_provider=provider,
         llm_model=model,
+        llm_rule_think=rule_think,
+        llm_fit_think=fit_think,
         llm_max_retries=max_retries,
         report=ScoringReportConfig(
             threshold=threshold,

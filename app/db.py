@@ -56,8 +56,7 @@ CREATE TABLE IF NOT EXISTS job_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL,
     rule_score REAL NOT NULL,
-    resume_embedding_score REAL,
-    ideal_job_embedding_score REAL,
+    fit_recommendation TEXT,
     total_score REAL NOT NULL,
     llm_provider TEXT,
     llm_model TEXT,
@@ -156,6 +155,15 @@ def _sync_job_scores_table_schema(connection: sqlite3.Connection) -> None:
         row[1]
         for row in connection.execute("PRAGMA table_info(job_scores)")
     }
+
+    legacy_columns = {"resume_embedding_score", "ideal_job_embedding_score"}
+    if columns & legacy_columns:
+        _rebuild_job_scores_table(connection)
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(job_scores)")
+        }
+
     required_columns: dict[str, str] = {
         "llm_provider": "TEXT",
         "llm_model": "TEXT",
@@ -163,6 +171,7 @@ def _sync_job_scores_table_schema(connection: sqlite3.Connection) -> None:
         "breakdown_json": "TEXT",
         "scoring_status": "TEXT NOT NULL DEFAULT 'ok'",
         "scoring_error": "TEXT",
+        "fit_recommendation": "TEXT",
     }
 
     for column_name, column_type in required_columns.items():
@@ -171,6 +180,70 @@ def _sync_job_scores_table_schema(connection: sqlite3.Connection) -> None:
         connection.execute(
             f"ALTER TABLE job_scores ADD COLUMN {column_name} {column_type}"
         )
+
+
+def _rebuild_job_scores_table(connection: sqlite3.Connection) -> None:
+    """Rebuild job_scores to drop legacy embedding columns."""
+    connection.execute(
+        """
+        CREATE TABLE job_scores_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER NOT NULL,
+            rule_score REAL NOT NULL,
+            fit_recommendation TEXT,
+            total_score REAL NOT NULL,
+            llm_provider TEXT,
+            llm_model TEXT,
+            feature_results_json TEXT,
+            breakdown_json TEXT,
+            scoring_status TEXT NOT NULL DEFAULT 'ok',
+            scoring_error TEXT,
+            scoring_version TEXT NOT NULL,
+            scored_at TEXT NOT NULL,
+            FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+            UNIQUE(job_id, scoring_version)
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO job_scores_new (
+            id,
+            job_id,
+            rule_score,
+            fit_recommendation,
+            total_score,
+            llm_provider,
+            llm_model,
+            feature_results_json,
+            breakdown_json,
+            scoring_status,
+            scoring_error,
+            scoring_version,
+            scored_at
+        )
+        SELECT
+            id,
+            job_id,
+            rule_score,
+            fit_recommendation,
+            total_score,
+            llm_provider,
+            llm_model,
+            feature_results_json,
+            breakdown_json,
+            scoring_status,
+            scoring_error,
+            scoring_version,
+            scored_at
+        FROM job_scores
+        """
+    )
+    connection.execute("DROP TABLE job_scores")
+    connection.execute("ALTER TABLE job_scores_new RENAME TO job_scores")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_job_scores_job_id ON job_scores(job_id)"
+    )
 
 
 @contextmanager

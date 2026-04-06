@@ -107,6 +107,7 @@ def _fetch_scored_rows(
             jobs.first_seen_at,
             jobs.last_seen_at,
             job_scores.total_score,
+            job_scores.fit_recommendation,
             job_scores.scored_at
         FROM jobs
         JOIN job_scores
@@ -145,6 +146,7 @@ def _fetch_all_jobs_rows(
             jobs.first_seen_at,
             jobs.last_seen_at,
             job_scores.total_score,
+            job_scores.fit_recommendation,
             job_scores.scored_at
         FROM jobs
         LEFT JOIN job_scores
@@ -209,6 +211,7 @@ def _to_dataframe(rows: list[sqlite3.Row]) -> pd.DataFrame:
     columns = [
         "Job ID",
         "Score",
+        "Fit Recommendation",
         "Title",
         "Company",
         "Location",
@@ -231,6 +234,7 @@ def _to_dataframe(rows: list[sqlite3.Row]) -> pd.DataFrame:
         record: dict[str, Any] = {
             "Job ID": job_id,
             "Score": row["total_score"],
+            "Fit Recommendation": _as_text(row["fit_recommendation"]) or "",
             "Title": _as_text(row["title"]) or "",
             "Company": _as_text(row["company"]) or "",
             "Location": _as_text(row["location"]) or "",

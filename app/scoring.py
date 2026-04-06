@@ -9,7 +9,7 @@ from typing import Any
 
 from app.config import WorkerConfig
 from app.db import utc_now_iso
-from app.ollama import classify_rule_result
+from app.ollama import classify_fit_recommendation, classify_rule_result
 from time import monotonic # temp import to see how long scoring takes
 
 @dataclass(frozen=True)
@@ -49,6 +49,7 @@ def run_job_scoring(
         feature_results: dict[str, str] = {}
         breakdown: list[dict[str, Any]] = []
         rule_score_total = 0.0
+        fit_recommendation: str | None = None
         status = "ok"
         error_message: str | None = None
         print(f"scoring job_id {job_id}")
@@ -60,6 +61,7 @@ def run_job_scoring(
                     job_text=job_text,
                     question=rule.prompt,
                     result_options=rule.result_options,
+                    think=settings.llm_rule_think,
                     max_retries=settings.llm_max_retries,
                 )
                 print(f"   job rule {rule.name} scored in {monotonic() - start_time} sec") # temp
@@ -85,6 +87,15 @@ def run_job_scoring(
                 if rule.terminate_options and result in rule.terminate_options:
                     break # exit rule scoring loop for jobs that hit the terminate option / dealbreaker
 
+            fit_recommendation = classify_fit_recommendation(
+                model=settings.llm_model,
+                job_text=job_text,
+                resume_text=config.resume_text,
+                ideal_job_text=config.ideal_job_text,
+                think=settings.llm_fit_think,
+                max_retries=settings.llm_max_retries,
+            )
+
             jobs_scored_ok += 1
         except Exception as exc:
             status = "failed"
@@ -96,6 +107,7 @@ def run_job_scoring(
             job_id=job_id,
             rule_score=rule_score_total,
             total_score=rule_score_total,
+            fit_recommendation=fit_recommendation,
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,
             feature_results=feature_results,
@@ -237,6 +249,7 @@ def _upsert_job_score(
     job_id: int,
     rule_score: float,
     total_score: float,
+    fit_recommendation: str | None,
     llm_provider: str,
     llm_model: str,
     feature_results: dict[str, str],
@@ -251,8 +264,7 @@ def _upsert_job_score(
         INSERT INTO job_scores (
             job_id,
             rule_score,
-            resume_embedding_score,
-            ideal_job_embedding_score,
+            fit_recommendation,
             total_score,
             llm_provider,
             llm_model,
@@ -262,12 +274,11 @@ def _upsert_job_score(
             scoring_error,
             scoring_version,
             scored_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_id, scoring_version)
         DO UPDATE SET
             rule_score = excluded.rule_score,
-            resume_embedding_score = excluded.resume_embedding_score,
-            ideal_job_embedding_score = excluded.ideal_job_embedding_score,
+            fit_recommendation = excluded.fit_recommendation,
             total_score = excluded.total_score,
             llm_provider = excluded.llm_provider,
             llm_model = excluded.llm_model,
@@ -280,8 +291,7 @@ def _upsert_job_score(
         (
             job_id,
             rule_score,
-            None,
-            None,
+            fit_recommendation,
             total_score,
             llm_provider,
             llm_model,
