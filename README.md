@@ -78,8 +78,8 @@ The worker is driven by the files in `config/`:
 - `config/.env`: private environment values such as `SERPAPI_API_KEY`
 - `config/queries.json`: enabled search requests and page limits
 - `config/scoring.json`: scoring rules, model config, and report settings
-- `config/resume.txt`: resume text for future comparison features
-- `config/ideal_job.txt`: target-role reference text for future comparison features
+- `config/resume.txt`: resume text used by the fit recommendation check
+- `config/ideal_job.txt`: target-role text used by the fit recommendation check
 - `config/jobs.db`: SQLite database
 - `config/reports/`: generated report workbooks
 
@@ -111,6 +111,7 @@ Each query is close to the raw SerpApi request shape:
 
 - scoring version
 - Ollama provider/model settings
+- separate Ollama think-mode settings for rule scoring and fit recommendation
 - rule definitions and scoring weights
 - report threshold
 - whether to include the `all_jobs_list` tab
@@ -160,13 +161,14 @@ The current implementation is rule-based classification driven by Ollama:
 - Ollama must return one allowed result
 - matching results add or subtract score
 - some rules can terminate scoring early
+- a separate LLM pass assigns a `low`, `medium`, or `high` fit recommendation using the
+  job text, `resume.txt`, and `ideal_job.txt`
 - one row per `job_id + scoring_version` is upserted into `job_scores`
 
 Important current-state note:
 
-- embedding scoring is planned but not implemented yet
-- `resume_embedding_score` and `ideal_job_embedding_score` exist in the schema but are currently stored as `NULL`
-- scoring is currently based on rule evaluation only
+- `fit_recommendation` is stored separately and does not affect `total_score`
+- numeric scoring is currently based on rule evaluation only
 
 ## Reporting
 
@@ -177,6 +179,7 @@ Reports are written to `config/reports/` as `.xlsx` files with:
 - `new` tab: jobs considered new since the latest export
 - `all` tab: all scored jobs above the configured threshold
 - `all_jobs_list` tab: optional full list of scorable jobs
+- a `Fit Recommendation` column sourced from `job_scores.fit_recommendation`
 
 The current report logic defines "new" like this:
 
@@ -238,8 +241,7 @@ Stores one scoring row per job and scoring version.
 - `id`
 - `job_id`
 - `rule_score`
-- `resume_embedding_score`
-- `ideal_job_embedding_score`
+- `fit_recommendation`
 - `total_score`
 - `llm_provider`
 - `llm_model`
@@ -367,7 +369,6 @@ Required runtime pieces:
 
 These are still planned rather than live:
 
-- embedding similarity scoring
 - multi-resume routing
 - UI/dashboard
 - application tracking
