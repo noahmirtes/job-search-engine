@@ -1,8 +1,10 @@
 {
-  "version": "v2",
+  "version": "v3",
   "llm": {
     "provider": "ollama",
-    "model": "gemma3:4b",
+    "model": "gemma4",
+    "rule_think": false,
+    "fit_think": true,
     "max_retries": 3
   },
 
