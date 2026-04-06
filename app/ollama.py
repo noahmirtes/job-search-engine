@@ -16,6 +16,7 @@ def classify_rule_result(
     result_options: list[str],
     think: bool,
     max_retries: int,
+    keep_alive: float | str | None = None,
     base_url: str = OLLAMA_BASE_URL,
     timeout_seconds: int = 90,
 ) -> str:
@@ -45,6 +46,7 @@ def classify_rule_result(
                 model=model,
                 prompt=prompt,
                 think=think,
+                keep_alive=keep_alive,
                 timeout_seconds=timeout_seconds,
             )
             parsed_result = _extract_result(raw_response)
@@ -73,6 +75,7 @@ def classify_fit_recommendation(
     ideal_job_text: str,
     think: bool,
     max_retries: int,
+    keep_alive: float | str | None = None,
     base_url: str = OLLAMA_BASE_URL,
     timeout_seconds: int = 90,
 ) -> str:
@@ -102,6 +105,7 @@ def classify_fit_recommendation(
                 model=model,
                 prompt=prompt,
                 think=think,
+                keep_alive=keep_alive,
                 timeout_seconds=timeout_seconds,
             )
             parsed_result = _extract_result(raw_response)
@@ -182,6 +186,7 @@ def _call_ollama_generate(
     model: str,
     prompt: str,
     think: bool,
+    keep_alive: float | str | None,
     timeout_seconds: int,
 ) -> str:
     """Call Ollama generate and return the raw textual response body."""
@@ -199,6 +204,7 @@ def _call_ollama_generate(
         think=think,
         format="json",
         options={"temperature": 0},
+        keep_alive=keep_alive,
     )
     output = payload.get("response")
     if not isinstance(output, str) or not output.strip():
@@ -236,3 +242,21 @@ def _extract_result(raw_response: str) -> str:
 
 def _normalize_option(value: str) -> str:
     return value.strip().lower()
+
+
+def unload_model(
+    model: str,
+    *,
+    base_url: str = OLLAMA_BASE_URL,
+) -> None:
+    """Ask Ollama to unload a model immediately after a pass finishes."""
+    if not model.strip():
+        raise ValueError("Ollama model name is required.")
+
+    client = Client(host=base_url)
+    client.generate(
+        model=model,
+        prompt="",
+        stream=False,
+        keep_alive=0,
+    )

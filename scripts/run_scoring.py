@@ -36,10 +36,21 @@ def main() -> None:
         summary = run_job_scoring(connection, config, only_unscored=False)
 
     print(f"Scoring version: {summary.scoring_version}")
-    print(f"LLM provider/model: {summary.llm_provider}/{summary.llm_model}")
+    print(f"LLM provider: {summary.llm_provider}")
     print(f"Jobs selected: {summary.jobs_selected}")
-    print(f"Jobs scored (ok): {summary.jobs_scored_ok}")
-    print(f"Jobs failed: {summary.jobs_failed}")
+    print(
+        "Rule pass: "
+        f"model={summary.rule_model}, "
+        f"ok={summary.jobs_scored_ok}, "
+        f"failed={summary.jobs_failed}"
+    )
+    print(
+        "Fit pass: "
+        f"model={summary.fit_model}, "
+        f"attempted={summary.fit_jobs_attempted}, "
+        f"ok={summary.fit_jobs_scored_ok}, "
+        f"failed={summary.fit_jobs_failed}"
+    )
 
 
 if __name__ == "__main__":

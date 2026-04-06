@@ -54,12 +54,18 @@ class ScoringConfig:
 
     version: str
     llm_provider: str
-    llm_model: str
+    llm_rule_model: str
+    llm_fit_model: str
     llm_rule_think: bool
     llm_fit_think: bool
     llm_max_retries: int
     report: "ScoringReportConfig"
     rules: list[ScoringRuleConfig]
+
+    @property
+    def llm_model(self) -> str:
+        """Temporary alias while scoring still runs as a single mixed pass."""
+        return self.llm_rule_model
 
 
 @dataclass(frozen=True)
@@ -234,10 +240,19 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
     if provider != "ollama":
         raise ValueError(f"Unsupported llm.provider '{provider}'. Only 'ollama' is supported.")
 
-    model = llm.get("model", "")
-    if not isinstance(model, str):
-        raise ValueError("scoring.json llm.model must be a string.")
-    model = model.strip()
+    rule_model = llm.get("rule_model", "")
+    if not isinstance(rule_model, str):
+        raise ValueError("scoring.json llm.rule_model must be a string.")
+    rule_model = rule_model.strip()
+    if not rule_model:
+        raise ValueError("scoring.json llm.rule_model must be a non-empty string.")
+
+    fit_model = llm.get("fit_model", "")
+    if not isinstance(fit_model, str):
+        raise ValueError("scoring.json llm.fit_model must be a string.")
+    fit_model = fit_model.strip()
+    if not fit_model:
+        raise ValueError("scoring.json llm.fit_model must be a non-empty string.")
 
     max_retries = llm.get("max_retries", 3)
     if not isinstance(max_retries, int) or max_retries < 1:
@@ -354,7 +369,8 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
     return ScoringConfig(
         version=version,
         llm_provider=provider,
-        llm_model=model,
+        llm_rule_model=rule_model,
+        llm_fit_model=fit_model,
         llm_rule_think=rule_think,
         llm_fit_think=fit_think,
         llm_max_retries=max_retries,

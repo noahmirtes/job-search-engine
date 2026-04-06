@@ -37,12 +37,27 @@ def main() -> None:
     
     # score jobs
     with get_connection(config.paths.db_path) as connection:
-        summary = run_job_scoring(connection, config, only_unscored=False)
+        scoring_summary = run_job_scoring(connection, config, only_unscored=False)
     
     # get connection
     with get_connection(config.paths.db_path) as connection:
         summary = generate_report(connection, config)
 
+    print(f"Scoring version: {scoring_summary.scoring_version}")
+    print(f"LLM provider: {scoring_summary.llm_provider}")
+    print(
+        "Rule pass: "
+        f"model={scoring_summary.rule_model}, "
+        f"ok={scoring_summary.jobs_scored_ok}, "
+        f"failed={scoring_summary.jobs_failed}"
+    )
+    print(
+        "Fit pass: "
+        f"model={scoring_summary.fit_model}, "
+        f"attempted={scoring_summary.fit_jobs_attempted}, "
+        f"ok={scoring_summary.fit_jobs_scored_ok}, "
+        f"failed={scoring_summary.fit_jobs_failed}"
+    )
     print(f"Export id: {summary.export_id}")
     print(f"Report path: {summary.export_path}")
     print(f"Rows in 'new' tab: {summary.new_count}")

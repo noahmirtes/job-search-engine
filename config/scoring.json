@@ -2,7 +2,8 @@
   "version": "v3",
   "llm": {
     "provider": "ollama",
-    "model": "gemma4:e2b",
+    "rule_model": "gemma3.5:4b",
+    "fit_model": "gemma4:e2b",
     "rule_think": false,
     "fit_think": true,
     "max_retries": 3
@@ -16,46 +17,39 @@
   "rules": [
     {
       "name": "junior_position_strong",
-      "prompt": "Is this clearly a junior, entry-level, associate, new grad, or Software Engineer I role?",
+      "prompt": "Is this clearly a junior, entry-level, associate, new grad, or Software Engineer I role? Answer true only if the posting explicitly indicates junior level.",
       "score": 60,
       "result_options": ["true", "false"],
       "trigger_result": "true",
-      "terminate_options" : ["false"]
-    },
-    {
-      "name": "frontend_primary_penalty",
-      "prompt": "Is this role primarily focused on frontend development (React, UI/UX, styling, etc.)?",
-      "score": -40,
-      "result_options": ["true", "false"],
-      "trigger_result": "true",
-      "terminate_options" : ["true"]
+      "terminate_options": ["false"]
     },
     {
       "name": "experience_too_high",
-      "prompt": "Does this role clearly require more than 3 years of professional experience?",
-      "score": -40,
+      "prompt": "Does this role clearly require more than 3 years of professional software engineering experience? Answer true only if the posting explicitly asks for more than 3 years.",
+      "score": -50,
       "result_options": ["true", "false"],
       "trigger_result": "true",
-      "terminate_options" : ["true"]
+      "terminate_options": ["true"]
     },
     {
-      "name": "general_software_engineering_role",
-      "prompt": "Is this a general software engineering role (not specialized in a niche like QA, IT support, or data analysis)?",
-      "score": 20,
+      "name": "frontend_primary_penalty",
+      "prompt": "Is this role primarily focused on frontend development such as React, UI work, styling, design systems, or client-side web development?",
+      "score": -50,
       "result_options": ["true", "false"],
-      "trigger_result": "true"
+      "trigger_result": "true",
+      "terminate_options": ["true"]
     },
     {
       "name": "backend_primary",
-      "prompt": "Is this role primarily focused on backend, APIs, services, or server-side development?",
-      "score": 25,
+      "prompt": "Is this role primarily focused on backend development, APIs, services, databases, business logic, or server-side systems?",
+      "score": 30,
       "result_options": ["true", "false"],
       "trigger_result": "true"
     },
     {
       "name": "python_bonus",
-      "prompt": "Does this role use or prefer Python?",
-      "score": 20,
+      "prompt": "Does this role explicitly use, require, or prefer Python?",
+      "score": 15,
       "result_options": ["true", "false"],
       "trigger_result": "true"
     },
@@ -67,7 +61,7 @@
       "trigger_result": "true"
     }
   ],
-  
+
   "inactive_rules": [
     {
       "name": "internship_role",
