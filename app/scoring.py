@@ -12,6 +12,8 @@ from app.db import utc_now_iso
 from app.ollama import classify_fit_recommendation, classify_rule_result, unload_model
 from time import monotonic # temp import to see how long scoring takes
 
+# ------------------------------ MODELS ------------------------------ #
+
 @dataclass(frozen=True)
 class ScoringRunSummary:
     """Aggregate counters returned after scoring finishes."""
@@ -28,6 +30,21 @@ class ScoringRunSummary:
     fit_jobs_scored_ok: int
     fit_jobs_failed: int
 
+@dataclass(frozen=True)
+class RulePassResult:
+    jobs_scored_ok: int
+    jobs_failed: int
+    successful_rows: list[sqlite3.Row]
+
+
+@dataclass(frozen=True)
+class FitPassResult:
+    jobs_attempted: int
+    jobs_scored_ok: int
+    jobs_failed: int
+
+
+# ------------------------- SCORING ENTRYPOINT ------------------------ #
 
 def run_job_scoring(
     connection: sqlite3.Connection,
@@ -65,19 +82,8 @@ def run_job_scoring(
     )
 
 
-@dataclass(frozen=True)
-class RulePassResult:
-    jobs_scored_ok: int
-    jobs_failed: int
-    successful_rows: list[sqlite3.Row]
 
-
-@dataclass(frozen=True)
-class FitPassResult:
-    jobs_attempted: int
-    jobs_scored_ok: int
-    jobs_failed: int
-
+# --------------------------- SCORING PASSES -------------------------- #
 
 def _run_rule_scoring_pass(
     connection: sqlite3.Connection,
@@ -214,6 +220,8 @@ def _run_fit_scoring_pass(
     )
 
 
+# ------------------------- JOB TEXT BUILDING ------------------------- #
+
 def _load_jobs_for_scoring(
     connection: sqlite3.Connection,
     *,
@@ -266,6 +274,8 @@ def _build_job_text(row: sqlite3.Row) -> str:
     ]
     return "\n".join(sections)
 
+
+# ---------------------------- TEXT HELPERS --------------------------- #
 
 def _extract_highlights_text(job_highlights_json: str | None) -> str:
     """Flatten job_highlights JSON into a readable text line."""
@@ -329,6 +339,8 @@ def _safe_text(value: Any) -> str:
     text = str(value).strip()
     return text if text else "N/A"
 
+
+# ----------------------------- DB WRITES ----------------------------- #
 
 def _upsert_rule_score(
     *,
