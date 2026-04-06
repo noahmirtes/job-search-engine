@@ -1,314 +1,375 @@
-Job Search Decision Engine
+# Job Search Decision Engine
 
-Overview
+## Overview
 
-This project is a local-first job search system that replaces manual job board browsing with a structured pipeline for ingesting, storing, scoring, and exporting job opportunities.
+This project is a local-first job search pipeline for collecting Google Jobs results through SerpApi, storing them historically, scoring them, and exporting reviewable Excel reports.
 
-The system pulls job listings from SerpApi (Google Jobs), stores every request and all returned data historically, normalizes job records, deduplicates jobs at the normalized level, scores them using deterministic rules and embedding similarity, and exports a curated list of high-quality opportunities.
+The current codebase supports:
 
-This is a decision engine for job search. It is not a scraper, not an application tracker, and not an auto-apply system.
+- search ingestion from SerpApi Google Jobs
+- raw request/response archival in SQLite
+- normalized job upsert and deduplication
+- rule-based job scoring through Ollama
+- report generation to Excel
+- optional orchestration for scheduled profile runs
 
-⸻
+This is a decision engine for job search. It is not an auto-apply tool, not an ATS, and not a dashboard app.
 
-Core Goals
-	•	Collect job data from diverse aggregated sources through Google Jobs / SerpApi
-	•	Preserve every request and response for historical reference
-	•	Normalize job data into a clean internal schema
-	•	Deduplicate repeated jobs without discarding raw source data
-	•	Score jobs using:
-	•	rule-based relevance signals
-	•	embedding similarity against target reference text
-	•	Export jobs that have not yet been surfaced in a previous export
-	•	Produce a periodic (e.g., weekly) review sheet of relevant jobs to apply to
+## Current Pipeline
 
-⸻
+The implemented flow is:
 
-Current Structure
-	•	`app/` contains the shared runtime code that will be bundled into the Docker image
-	•	`scripts/` contains lightweight entrypoints and local helpers that call into `app/`
-	•	`config/` contains per-person inputs and runtime state for one user profile
+1. Load config and environment from `config/`.
+2. Run enabled SerpApi Google Jobs searches.
+3. Store every raw API page in `raw_requests`.
+4. Normalize `jobs_results` and upsert them into `jobs`.
+5. Score scorable jobs into `job_scores`.
+6. Export a workbook to `config/reports/`.
+7. Record export history in `exports` and `export_jobs`.
 
-The current `config/` folder is the testing profile for one person. Later, an orchestrator can point the worker at a different person's config folder without changing the core code.
+There are also helper scripts to replay historical raw responses into `jobs` and to recompute scoring eligibility flags.
 
-⸻
+## Repo Layout
 
-Architecture
-
-The runtime is centered around the `app` package. It owns the reusable logic for:
-	•	loading config and environment values
-	•	initializing the database
-	•	executing SerpApi searches
-	•	storing raw requests and responses
-	•	preparing the search pipeline for later normalization, scoring, and export work
-
-The config folder stays outside the application package because it is person-specific. That lets us run the same Docker image against different sets of inputs by swapping paths rather than rewriting code.
-
-The current flow is:
-
-load per-person config → validate inputs → load env → initialize db → run configured SerpApi searches → store raw responses
-
-Normalization, scoring, and export will sit behind the same `app` package as the project grows, so the worker stays easy to package and reuse.
-
-⸻
-
-Data Retention Rules
-	•	Every API request must be stored
-	•	Every raw response must be preserved
-	•	Duplicate prevention applies only to normalized job entries
-	•	Scoring results are stored per job and scoring version
-	•	Export operations track which jobs have already been surfaced
-
-⸻
-
-Scoring System
-
-Each job is scored using a combination of deterministic rules and embedding similarity.
-
-Rule-Based Scoring
-
-Explicit signals such as:
-	•	job title relevance
-	•	keyword matches (Python, backend, APIs, etc.)
-	•	seniority alignment
-	•	remote alignment
-	•	penalties for mismatch
-
-Embedding Similarity
-
-Embedding similarity is used as a scoring signal.
-
-Each job description is compared against:
-	•	Resume reference (your current resume text)
-	•	Ideal job reference (a manually written description of target roles)
-
-These similarity scores contribute to the final score but do not dominate it.
-
-⸻
-
-Reference Inputs
-
-Embedding references are stored as plain text files:
-	•	config/resume.txt
-	•	config/ideal_job.txt
-
-These files are embedded and used as comparison targets for job descriptions.
-
-⸻
-
-Deduplication Strategy
-
-Duplicates are identified using multiple signals:
-	•	title
-	•	company
-	•	apply URL
-	•	normalized composite hash
-
-The goal is to prevent duplicate job entries while preserving all raw data.
-
-⸻
-
-Scoring Persistence
-
-The job_scores table stores the latest score for each job under a given scoring version.
-
-Behavior:
-	•	new jobs are scored automatically during ingestion
-	•	scoring logic is versioned
-	•	manual rescoring can be triggered when scoring logic changes
-	•	rescoring updates jobs to the new scoring version
-	•	duplicate score entries for the same job and version are not retained
-
-⸻
-
-Export Behavior
-
-Exports include:
-	•	jobs that have not been included in a previous export
-	•	jobs from the most recent ingestion window
-	•	jobs with scores above a configurable threshold
-
-This ensures exports contain only new, relevant opportunities.
-
-Export format:
-	•	.xlsx
-
-Each row includes:
-	•	title
-	•	company
-	•	location
-	•	apply URL
-	•	score
-	•	description
-	•	date posted
-	•	source query (optional but recommended)
-
-⸻
-
-Configuration
-
-Per-person inputs live in `config/`:
-	•	`config/queries.json` defines the enabled search requests
-	•	`config/resume.txt` holds the resume text used for comparison
-	•	`config/ideal_job.txt` holds the target-role reference text
-	•	`config/.env` holds private environment values such as `SERPAPI_API_KEY`
-	•	`config/jobs.db` is the SQLite database for that person
-
-This layout keeps the worker stateless with respect to inputs. The code stays the same, while the orchestrator or local setup can swap the config folder per person.
-
-⸻
-
-Non-Goals (v1)
-	•	no application tracking
-	•	no interview/rejection tracking
-	•	no multi-resume routing
-	•	no UI/dashboard
-	•	no auto-apply system
-	•	no LLM-based parsing as a core dependency
-
-⸻
-
-Planned Extensions (Future)
-
-Analysis Module
-	•	identify recurring employer requirements
-	•	extract common tools and technologies
-	•	surface skill gaps
-	•	analyze trends across job listings
-
-Multi-Resume Support
-	•	route jobs to different resume variants
-
-Advanced AI Parsing
-	•	structured extraction of job requirements
-
-⸻
-
-Suggested Project Structure
-
+```text
 job-search-engine/
-	•	app/
-	•	config.py
-	•	db.py
-	•	main.py
-	•	serpapi.py
-	•	scripts/
-	•	init_db.py
-	•	run_search.py
-	•	config/
-	•	queries.json
-	•	resume.txt
-	•	ideal_job.txt
-	•	.env
-	•	jobs.db
-	•	README.md
-	•	requirements.txt
-
-⸻
-
-Database Model (High Level)
-
-raw_requests
-
-Stores every API request/response
-	•	id
-	•	query_name
-	•	query_params_json
-	•	response_json
-	•	requested_at
-
-jobs
-
-Stores normalized unique job entries
-	•	id
-	•	source_job_id
-	•	title
-	•	company
-	•	location
-	•	description
-	•	apply_url
-	•	date_posted
-	•	normalized_hash
-	•	first_seen_at
-	•	last_seen_at
-
-job_scores
-
-Stores scoring results
-	•	id
-	•	job_id
-	•	rule_score
-	•	resume_embedding_score
-	•	ideal_job_embedding_score
-	•	total_score
-	•	scoring_version
-	•	scored_at
-
-exports
-
-Stores export runs
-	•	id
-	•	exported_at
-	•	export_file_name
-
-export_jobs
-
-Join table for jobs included in each export
-	•	id
-	•	export_id
-	•	job_id
-
-⸻
-
-Tech Stack
-	•	Python
-	•	SerpApi (Google Jobs)
-	•	SQLite
-	•	Ollama (for embeddings)
-	•	requests / httpx
-	•	openpyxl or pandas (for XLSX export)
-
-⸻
-
-Usage
-
-Initialize the local database:
-
-```bash
-python scripts/init_db.py
+├── app/
+│   ├── config.py
+│   ├── db.py
+│   ├── jobs.py
+│   ├── ollama.py
+│   ├── posting_date.py
+│   ├── reporting.py
+│   ├── scoring.py
+│   ├── search.py
+│   └── serpapi.py
+├── config/
+│   ├── .env
+│   ├── ideal_job.txt
+│   ├── jobs.db
+│   ├── queries.json
+│   ├── reports/
+│   ├── resume.txt
+│   └── scoring.json
+├── orchestrator/
+│   ├── .env
+│   ├── emailer.py
+│   ├── main.py
+│   ├── models.py
+│   ├── pipeline.py
+│   ├── profiles.json
+│   └── state.json
+├── scripts/
+│   ├── init_db.py
+│   ├── recompute_job_scorability.py
+│   ├── run_report.py
+│   ├── run_scoring.py
+│   ├── run_search.py
+│   ├── score_and_report.py
+│   └── upsert_jobs_from_raw.py
+├── README.md
+└── requirements.txt
 ```
 
-Run the configured search pipeline:
+## Configuration
 
-```bash
-python scripts/run_search.py
+The worker is driven by the files in `config/`:
+
+- `config/.env`: private environment values such as `SERPAPI_API_KEY`
+- `config/queries.json`: enabled search requests and page limits
+- `config/scoring.json`: scoring rules, model config, and report settings
+- `config/resume.txt`: resume text for future comparison features
+- `config/ideal_job.txt`: target-role reference text for future comparison features
+- `config/jobs.db`: SQLite database
+- `config/reports/`: generated report workbooks
+
+### `queries.json`
+
+Each query is close to the raw SerpApi request shape:
+
+```json
+[
+  {
+    "name": "backend_remote_us",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "q": "python backend engineer",
+      "location": "United States",
+      "google_domain": "google.com",
+      "hl": "en",
+      "gl": "us"
+    }
+  }
+]
 ```
 
-Those scripts are intentionally thin wrappers around `app`, which keeps the core Docker image focused on shared runtime behavior instead of CLI glue.
+### `scoring.json`
 
-⸻
+`scoring.json` currently controls:
 
-Design Principles
-	•	historical completeness: no data loss
-	•	deterministic core: rules are explicit and inspectable
-	•	embeddings as signal: similarity informs ranking
-	•	modular architecture: ingestion, scoring, and export are decoupled
-	•	cost-aware: minimize API usage through controlled queries
+- scoring version
+- Ollama provider/model settings
+- rule definitions and scoring weights
+- report threshold
+- whether to include the `all_jobs_list` tab
 
-⸻
+## Search / Ingestion
 
-Purpose
+Search execution lives in `app/search.py`. For each enabled query it:
 
-This project exists to:
-	•	eliminate manual job searching
-	•	prioritize high-fit opportunities
-	•	create a repeatable, optimized job search workflow
+- calls SerpApi through `app/serpapi.py`
+- paginates using SerpApi `next_page_token`
+- stores every raw page response in `raw_requests`
+- upserts normalized jobs from that payload into `jobs`
 
-It also serves as a portfolio project demonstrating:
-	•	API integration
-	•	data pipeline design
-	•	embedding-based similarity systems
-	•	practical automation for real-world use
+Job normalization lives in `app/jobs.py`. It currently extracts and stores fields including:
 
-⸻
+- title
+- company
+- location
+- description
+- apply URL
+- share link
+- schedule type
+- qualifications
+- raw job JSON
+- apply options JSON
+- extensions JSON
+- detected extensions JSON
+- job highlights JSON
+- derived `date_posted`
+- `is_scorable`
+- `scorable_missing_fields_json`
+- `normalized_hash`
 
-:::
+Deduplication/upsert identity currently works by:
+
+- `source_job_id` when available
+- otherwise `normalized_hash`
+
+## Scoring
+
+Scoring lives in `app/scoring.py`.
+
+The current implementation is rule-based classification driven by Ollama:
+
+- each job is turned into compact prompt text
+- each configured rule asks a closed-set question
+- Ollama must return one allowed result
+- matching results add or subtract score
+- some rules can terminate scoring early
+- one row per `job_id + scoring_version` is upserted into `job_scores`
+
+Important current-state note:
+
+- embedding scoring is planned but not implemented yet
+- `resume_embedding_score` and `ideal_job_embedding_score` exist in the schema but are currently stored as `NULL`
+- scoring is currently based on rule evaluation only
+
+## Reporting
+
+Report generation lives in `app/reporting.py`.
+
+Reports are written to `config/reports/` as `.xlsx` files with:
+
+- `new` tab: jobs considered new since the latest export
+- `all` tab: all scored jobs above the configured threshold
+- `all_jobs_list` tab: optional full list of scorable jobs
+
+The current report logic defines "new" like this:
+
+- read the most recent `exports.exported_at`
+- include rows where `jobs.first_seen_at > latest exported_at`
+
+That means the export reset lever is the `exports` table. Clearing only `export_jobs` does not reset what counts as new.
+
+## Database Schema
+
+The SQLite schema is defined in `app/db.py`.
+
+### `raw_requests`
+
+Stores every search page fetched from SerpApi.
+
+- `id`
+- `query_name`
+- `query_params_json`
+- `response_json`
+- `response_status`
+- `result_count`
+- `requested_at`
+
+### `jobs`
+
+Stores normalized and deduplicated jobs.
+
+- `id`
+- `source_job_id`
+- `title`
+- `company`
+- `location`
+- `description`
+- `apply_url`
+- `share_link`
+- `via`
+- `thumbnail`
+- `posted_at_text`
+- `schedule_type`
+- `work_from_home`
+- `qualifications_text`
+- `raw_job_json`
+- `apply_options_json`
+- `extensions_json`
+- `detected_extensions_json`
+- `job_highlights_json`
+- `date_posted`
+- `is_scorable`
+- `scorable_missing_fields_json`
+- `normalized_hash`
+- `first_seen_at`
+- `last_seen_at`
+
+### `job_scores`
+
+Stores one scoring row per job and scoring version.
+
+- `id`
+- `job_id`
+- `rule_score`
+- `resume_embedding_score`
+- `ideal_job_embedding_score`
+- `total_score`
+- `llm_provider`
+- `llm_model`
+- `feature_results_json`
+- `breakdown_json`
+- `scoring_status`
+- `scoring_error`
+- `scoring_version`
+- `scored_at`
+
+### `exports`
+
+Stores report run history.
+
+- `id`
+- `exported_at`
+- `export_file_name`
+
+### `export_jobs`
+
+Stores the jobs included in a given export.
+
+- `id`
+- `export_id`
+- `job_id`
+
+## Scripts
+
+### Initialize the database
+
+```bash
+.venv/bin/python scripts/init_db.py
+```
+
+Creates or syncs the SQLite schema in `config/jobs.db`.
+
+### Run search ingestion
+
+```bash
+.venv/bin/python scripts/run_search.py
+```
+
+Runs all enabled queries, stores every raw page, and upserts jobs.
+
+### Replay raw responses into jobs
+
+```bash
+.venv/bin/python scripts/upsert_jobs_from_raw.py
+```
+
+Useful for backfills if raw requests are already stored.
+
+### Recompute job scorable flags
+
+```bash
+.venv/bin/python scripts/recompute_job_scorability.py
+```
+
+Rebuilds `jobs.is_scorable` and `jobs.scorable_missing_fields_json`.
+
+### Run scoring
+
+```bash
+.venv/bin/python scripts/run_scoring.py
+```
+
+Scores jobs using the current `config/scoring.json` rules and model.
+
+### Run report export
+
+```bash
+.venv/bin/python scripts/run_report.py
+```
+
+Builds a report workbook from scored jobs and records export metadata.
+
+### Score and export in one command
+
+```bash
+.venv/bin/python scripts/score_and_report.py
+```
+
+Runs scoring first, then writes a report.
+
+## Orchestrator
+
+The `orchestrator/` package is a thin profile runner around the worker code. It exists to support scheduled runs and email delivery.
+
+It currently reads:
+
+- `orchestrator/profiles.json` for profile definitions and paths
+- `orchestrator/state.json` for run timestamps and last-run status
+- `orchestrator/.env` for mail credentials and orchestrator-specific env
+
+The orchestrator pipeline calls the same worker logic used by the scripts:
+
+- search
+- scoring
+- report generation
+- optional email notification
+
+## Setup
+
+Create a virtualenv, install dependencies, and make sure these are available:
+
+```bash
+pip install -r requirements.txt
+```
+
+Required runtime pieces:
+
+- SerpApi key in `config/.env` as `SERPAPI_API_KEY=...`
+- Ollama running locally on `http://localhost:11434`
+- the model referenced by `config/scoring.json` pulled locally
+
+## Current Design Principles
+
+- keep the system local-first and inspectable
+- preserve every API response page historically
+- keep config close to the raw API request shape
+- use modular worker code with thin scripts
+- prefer simple, explicit flow over heavy abstraction
+
+## What Is Not Implemented Yet
+
+These are still planned rather than live:
+
+- embedding similarity scoring
+- multi-resume routing
+- UI/dashboard
+- application tracking
+- interview/rejection workflow
+- auto-apply behavior
