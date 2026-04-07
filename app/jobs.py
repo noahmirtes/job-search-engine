@@ -12,7 +12,7 @@ from app.db import utc_now_iso
 from app.posting_date import derive_posted_date
 
 
-# Normalized in-memory job shape before DB write.
+# ---------------------------------------------------- DATACLASSES ----
 @dataclass(frozen=True)
 class JobRecord:
     source_job_id: str | None
@@ -40,6 +40,7 @@ class JobRecord:
     normalized_hash: str
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def upsert_jobs_from_payload(
     connection: sqlite3.Connection,
     payload: dict[str, Any],
@@ -86,6 +87,7 @@ def upsert_jobs_from_raw_response_json(
     )
 
 
+# ---------------------------------------------------- HELPERS ----
 def _to_job_record(
     raw_job: dict[str, Any],
     *,

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 
-# Public config contracts used by scripts/orchestrator code.
+# ---------------------------------------------------- DATACLASSES ----
 @dataclass(frozen=True)
 class WorkerPaths:
     """Filesystem inputs supplied by the orchestrator at worker startup."""
@@ -90,7 +90,7 @@ class WorkerConfig:
     ideal_job_text: str
 
 
-# Bootstrap entrypoint used by all worker scripts.
+# ---------------------------------------------------- ENTRYPOINTS ----
 def initialize_config(paths: WorkerPaths) -> WorkerConfig:
     """Load + validate all worker config inputs and return one runtime object."""
     resolved_paths = _resolve_paths(paths)
@@ -118,7 +118,7 @@ def initialize_config(paths: WorkerPaths) -> WorkerConfig:
     )
 
 
-# Internal helpers for path/env/file parsing.
+# ---------------------------------------------------- HELPERS ----
 def _resolve_paths(paths: WorkerPaths) -> WorkerPaths:
     """Normalize configured paths to absolute paths."""
     return WorkerPaths(

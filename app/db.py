@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
-# Canonical schema applied on fresh DB creation.
+# ---------------------------------------------------- CONSTANTS ----
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 
@@ -96,6 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_export_jobs_job_id ON export_jobs(job_id);
 """
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def utc_now_iso() -> str:
     """Return current UTC timestamp as ISO-8601 seconds precision."""
     return datetime.now(UTC).isoformat(timespec="seconds")
@@ -111,6 +112,7 @@ def init_db(db_path: Path) -> None:
         connection.commit()
 
 
+# ---------------------------------------------------- SCHEMA HELPERS ----
 def _sync_jobs_table_schema(connection: sqlite3.Connection) -> None:
     """Keep existing jobs tables aligned with the latest schema."""
     columns = {
@@ -248,6 +250,7 @@ def _rebuild_job_scores_table(connection: sqlite3.Connection) -> None:
     )
 
 
+# ---------------------------------------------------- CONNECTION HELPERS ----
 @contextmanager
 def get_connection(db_path: Path) -> Iterator[sqlite3.Connection]:
     """Yield a SQLite connection with commit/close lifecycle handled."""
@@ -261,6 +264,7 @@ def get_connection(db_path: Path) -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
+# ---------------------------------------------------- PERSISTENCE HELPERS ----
 def log_raw_request(
     connection: sqlite3.Connection,
     *,

@@ -8,11 +8,13 @@ from typing import Any, Iterator
 import serpapi
 
 
+# ---------------------------------------------------- EXCEPTIONS ----
 class SerpApiError(RuntimeError):
     """Raised for request/response issues from SerpApi."""
     pass
 
 
+# ---------------------------------------------------- DATACLASSES ----
 @dataclass(frozen=True)
 class SearchPage:
     """One fetched page plus request metadata used by downstream storage."""
@@ -36,6 +38,7 @@ class SearchAttempt:
     error_message: str | None = None
 
 
+# ---------------------------------------------------- CLIENT ----
 class SerpApiService:
     """Service wrapper that handles Google Jobs paging tokens."""
     def __init__(self, api_key: str, *, timeout: int = 30) -> None:
@@ -148,6 +151,7 @@ class SerpApiService:
         )
 
 
+# ---------------------------------------------------- HELPERS ----
 def extract_next_page_token(payload: dict[str, Any]) -> str | None:
     """Extract pagination token from a SerpApi response payload."""
     pagination = payload.get("serpapi_pagination")

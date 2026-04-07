@@ -7,6 +7,7 @@ from pathlib import Path
 from app.config import WorkerConfig
 
 
+# ---------------------------------------------------- CONSTANTS ----
 LOGGER_NAME = "job_search_engine"
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -14,6 +15,7 @@ HANDLER_KIND_ATTR = "_job_search_engine_handler_kind"
 FILE_PATH_ATTR = "_job_search_engine_file_path"
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def setup_worker_logging(log_path: Path | None = None) -> logging.Logger:
     """Configure the shared worker logger for console and optional file output."""
     logger = logging.getLogger(LOGGER_NAME)
@@ -49,6 +51,7 @@ def log_worker_startup(config: WorkerConfig, *, context: str = "worker") -> None
     )
 
 
+# ---------------------------------------------------- HELPERS ----
 def _ensure_console_handler(
     logger: logging.Logger,
     formatter: logging.Formatter,

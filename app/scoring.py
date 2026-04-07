@@ -13,9 +13,10 @@ from app.ollama import classify_fit_recommendation, classify_rule_result, unload
 from app.worker_logging import get_logger
 
 
+# ---------------------------------------------------- LOGGER ----
 LOGGER = get_logger("scoring")
 
-# ------------------------------ MODELS ------------------------------ #
+# ---------------------------------------------------- DATACLASSES ----
 
 @dataclass(frozen=True)
 class ScoringRunSummary:
@@ -49,7 +50,7 @@ class FitPassResult:
     model_used: bool
 
 
-# ------------------------- SCORING ENTRYPOINT ------------------------ #
+# ---------------------------------------------------- ENTRYPOINTS ----
 
 def run_job_scoring(
     connection: sqlite3.Connection,
@@ -112,7 +113,7 @@ def run_job_scoring(
     return summary
 
 
-# --------------------------- SCORING PASSES -------------------------- #
+# ---------------------------------------------------- HELPERS ----
 
 def _run_rule_scoring_pass(
     connection: sqlite3.Connection,

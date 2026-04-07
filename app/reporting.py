@@ -18,6 +18,7 @@ from app.db import utc_now_iso
 from app.worker_logging import get_logger
 
 
+# ---------------------------------------------------- CONSTANTS ----
 PASTEL_SECTION_STYLES = {
     "metadata": {
         "header_fill": PatternFill(fill_type="solid", fgColor="D9EAF7"),
@@ -62,6 +63,7 @@ COLUMN_WIDTH_CAPS = {
 LOGGER = get_logger("reporting")
 
 
+# ---------------------------------------------------- DATACLASSES ----
 @dataclass(frozen=True)
 class ReportRunSummary:
     """Run summary returned after one report export."""
@@ -81,6 +83,7 @@ class ReportSheetPayload:
     apply_links_by_row: list[dict[str, str]]
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def generate_report(
     connection: sqlite3.Connection,
     config: WorkerConfig,
@@ -153,6 +156,7 @@ def generate_report(
     return summary
 
 
+# ---------------------------------------------------- HELPERS ----
 def _fetch_scored_rows(
     *,
     connection: sqlite3.Connection,

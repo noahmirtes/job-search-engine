@@ -8,6 +8,7 @@ from ollama import Client
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def classify_rule_result(
     *,
     model: str,
@@ -127,6 +128,7 @@ def classify_fit_recommendation(
     )
 
 
+# ---------------------------------------------------- PROMPT HELPERS ----
 def _build_classification_prompt(
     *,
     question: str,
@@ -180,6 +182,7 @@ def _build_fit_recommendation_prompt(
     )
 
 
+# ---------------------------------------------------- RESPONSE HELPERS ----
 def _call_ollama_generate(
     *,
     client: Client,
@@ -240,10 +243,12 @@ def _extract_result(raw_response: str) -> str:
     raise ValueError("Could not parse JSON {\"result\": ...} from Ollama response.")
 
 
+# ---------------------------------------------------- NORMALIZATION HELPERS ----
 def _normalize_option(value: str) -> str:
     return value.strip().lower()
 
 
+# ---------------------------------------------------- LIFECYCLE HELPERS ----
 def unload_model(
     model: str,
     *,

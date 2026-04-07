@@ -8,6 +8,7 @@ from config import WorkerPaths, initialize_config
 from db import init_db
 
 
+# ---------------------------------------------------- HELPERS ----
 def _default_paths(project_root: Path) -> WorkerPaths:
     """Build default local profile paths."""
     config_dir = project_root / "config"
@@ -23,6 +24,7 @@ def _default_paths(project_root: Path) -> WorkerPaths:
     )
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def main() -> None:
     """Initialize config + DB for manual local smoke runs."""
     #project_root = Path(__file__).resolve().parent.parent

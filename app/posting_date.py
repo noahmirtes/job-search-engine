@@ -7,6 +7,7 @@ import re
 from zoneinfo import ZoneInfo
 
 
+# ---------------------------------------------------- CONSTANTS ----
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # Supported high-confidence patterns from Serp detected_extensions.posted_at.
@@ -15,6 +16,7 @@ DAYS_AGO_PATTERN = re.compile(r"^(\d+)\+?\s+days?\s+ago$")
 WEEKS_AGO_PATTERN = re.compile(r"^(\d+)\s+weeks?\s+ago$")
 
 
+# ---------------------------------------------------- ENTRYPOINTS ----
 def derive_posted_date(
     posted_at_text: str | None,
     anchor_requested_at_utc: str,
@@ -51,6 +53,7 @@ def derive_posted_date(
     return None
 
 
+# ---------------------------------------------------- HELPERS ----
 def _parse_anchor_utc(anchor_requested_at_utc: str) -> datetime:
     """Parse an ISO timestamp and normalize to timezone-aware UTC."""
     parsed = datetime.fromisoformat(anchor_requested_at_utc)
