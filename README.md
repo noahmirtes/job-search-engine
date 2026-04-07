@@ -1,35 +1,39 @@
 # Job Search Decision Engine
 
-## Overview
+This repo is a personal, local-first job search pipeline.
 
-This project is a local-first job search pipeline for collecting Google Jobs results through SerpApi, storing them historically, scoring them, and exporting reviewable Excel reports.
+The idea is simple: pull job results from Google Jobs through SerpApi, save the raw responses so nothing valuable gets lost, turn those results into normalized job rows, score them with Ollama, and export a spreadsheet that is actually usable when you're reviewing jobs.
 
-The current codebase supports:
+This is not an auto-apply bot. It is not trying to be a full SaaS app either. It is more like a practical filtering and review tool for one person running their own search.
 
-- search ingestion from SerpApi Google Jobs
-- raw request/response archival in SQLite
-- normalized job upsert and deduplication
-- rule-based job scoring through Ollama
-- report generation to Excel
-- optional orchestration for scheduled profile runs
+## What it does
 
-This is a decision engine for job search. It is not an auto-apply tool, not an ATS, and not a dashboard app.
+- runs saved job search queries from `config/queries.json`
+- archives every returned search page in SQLite
+- keeps a normalized `jobs` table for deduped job records
+- remembers which query names a job came from
+- scores jobs with LLM-driven rules from `config/scoring.json`
+- adds a separate fit recommendation pass using your resume and ideal role text
+- exports `.xlsx` reports to `config/reports/`
+- writes light operational logs to `config/worker.log`
+- falls back to `config/raw_response_backup/` if a raw response can't be written to SQLite
 
-## Current Pipeline
+## How the pipeline works
 
-The implemented flow is:
+At a high level, the flow is:
 
-1. Load config and environment from `config/`.
-2. Run enabled SerpApi Google Jobs searches.
-3. Store every raw API page in `raw_requests`.
-4. Normalize `jobs_results` and upsert them into `jobs`.
-5. Score scorable jobs into `job_scores`.
-6. Export a workbook to `config/reports/`.
-7. Record export history in `exports` and `export_jobs`.
+1. Load config from `config/`.
+2. Run the enabled SerpApi queries.
+3. Archive each returned raw search page right away.
+4. Parse and upsert jobs from that raw payload.
+5. Score jobs that are scorable.
+6. Generate an Excel report.
 
-There are also helper scripts to replay historical raw responses into `jobs` and to recompute scoring eligibility flags.
+One important design choice here: raw search responses are treated as the source of truth.
 
-## Repo Layout
+That means the search stage is intentionally "archive first, derive second." If parsing or job upserting fails later, the raw response is still preserved and can be replayed with the backfill script.
+
+## Project layout
 
 ```text
 job-search-engine/
@@ -42,7 +46,8 @@ job-search-engine/
 │   ├── reporting.py
 │   ├── scoring.py
 │   ├── search.py
-│   └── serpapi.py
+│   ├── serpapi.py
+│   └── worker_logging.py
 ├── config/
 │   ├── .env
 │   ├── ideal_job.txt
@@ -50,54 +55,107 @@ job-search-engine/
 │   ├── queries.json
 │   ├── reports/
 │   ├── resume.txt
-│   └── scoring.json
+│   ├── scoring.json
+│   └── worker.log
 ├── orchestrator/
-│   ├── .env
-│   ├── emailer.py
-│   ├── main.py
-│   ├── models.py
-│   ├── pipeline.py
-│   ├── profiles.json
-│   └── state.json
 ├── scripts/
 │   ├── init_db.py
 │   ├── recompute_job_scorability.py
-│   ├── run_report.py
-│   ├── run_scoring.py
-│   ├── run_search.py
-│   ├── score_and_report.py
+│   ├── run_pipeline.py
 │   └── upsert_jobs_from_raw.py
 ├── README.md
 └── requirements.txt
 ```
 
-## Configuration
+## Main pieces
 
-The worker is driven by the files in `config/`:
+### `app/search.py`
 
-- `config/.env`: private environment values such as `SERPAPI_API_KEY`
-- `config/queries.json`: enabled search requests and page limits
-- `config/scoring.json`: scoring rules, model config, and report settings
-- `config/resume.txt`: resume text used by the fit recommendation check
-- `config/ideal_job.txt`: target-role text used by the fit recommendation check
-- `config/jobs.db`: SQLite database
-- `config/reports/`: generated report workbooks
+Runs the search queries and handles the archive-first ingest flow.
 
-### `queries.json`
+- asks SerpApi for one page at a time
+- stores each returned attempt in `raw_requests`
+- commits that raw row immediately
+- only then upserts normalized jobs
+- writes a JSON backup to `config/raw_response_backup/` if the raw DB write fails
 
-Each query is close to the raw SerpApi request shape:
+### `app/jobs.py`
+
+Turns `jobs_results` payloads into normalized rows in `jobs`.
+
+It also handles:
+
+- deduping
+- query-source tracking with `query_names_json`
+- derived `date_posted`
+- scorable vs unscorable flagging
+
+### `app/scoring.py`
+
+Scores jobs using the rules in `config/scoring.json`.
+
+Right now scoring is LLM-driven, not keyword-driven.
+
+- each rule is a closed-set classification call
+- scores add up into a numeric total
+- some rules can terminate scoring early
+- a separate pass adds a `low` / `medium` / `high` fit recommendation
+- blacklisted companies are skipped before Ollama is called
+
+### `app/reporting.py`
+
+Builds the Excel output.
+
+Current report behavior:
+
+- exports to `config/reports/`
+- includes `new` and `all` sheets
+- can optionally include `all_jobs_list`
+- shows source query names
+- hyperlinks apply locations directly in the sheet
+- uses light pastel formatting for readability
+
+## Config files
+
+Everything important lives in `config/`.
+
+### `config/.env`
+
+Private env vars. At minimum you need:
+
+```env
+SERPAPI_API_KEY=your_key_here
+```
+
+The app loads this file itself in Python. You do not need to `source` it manually.
+
+If an env var is already set in the shell or on the machine, that existing value wins over the `.env` file.
+
+### `config/queries.json`
+
+Defines the searches to run.
+
+Each entry has:
+
+- `name`
+- `enabled`
+- `max_pages`
+- `request`
+
+Example:
 
 ```json
 [
   {
-    "name": "backend_remote_us",
+    "name": "junior_backend_engineer_ltype",
     "enabled": true,
-    "max_pages": 1,
+    "max_pages": 2,
     "request": {
       "engine": "google_jobs",
-      "q": "python backend engineer",
-      "location": "United States",
       "google_domain": "google.com",
+      "q": "junior backend engineer",
+      "location": "United States",
+      "ltype": "1",
       "hl": "en",
       "gl": "us"
     }
@@ -105,272 +163,165 @@ Each query is close to the raw SerpApi request shape:
 ]
 ```
 
-### `scoring.json`
+### `config/scoring.json`
 
-`scoring.json` currently controls:
+Controls the scoring behavior.
+
+It currently includes:
 
 - scoring version
-- Ollama provider/model settings
-- separate Ollama think-mode settings for rule scoring and fit recommendation
-- rule definitions and scoring weights
-- report threshold
-- whether to include the `all_jobs_list` tab
+- rule model and fit model
+- think-mode settings
+- max retries for each LLM call
+- report settings
+- company blacklist
+- active rules
 
-## Search / Ingestion
+Example blacklist shape:
 
-Search execution lives in `app/search.py`. For each enabled query it:
-
-- calls SerpApi through `app/serpapi.py`
-- paginates using SerpApi `next_page_token`
-- stores every raw page response in `raw_requests`
-- upserts normalized jobs from that payload into `jobs`
-
-Job normalization lives in `app/jobs.py`. It currently extracts and stores fields including:
-
-- title
-- company
-- location
-- description
-- apply URL
-- share link
-- schedule type
-- qualifications
-- raw job JSON
-- apply options JSON
-- extensions JSON
-- detected extensions JSON
-- job highlights JSON
-- derived `date_posted`
-- `is_scorable`
-- `scorable_missing_fields_json`
-- `normalized_hash`
-
-Deduplication/upsert identity currently works by:
-
-- `source_job_id` when available
-- otherwise `normalized_hash`
-
-## Scoring
-
-Scoring lives in `app/scoring.py`.
-
-The current implementation is rule-based classification driven by Ollama:
-
-- each job is turned into compact prompt text
-- each configured rule asks a closed-set question
-- Ollama must return one allowed result
-- matching results add or subtract score
-- some rules can terminate scoring early
-- a separate LLM pass assigns a `low`, `medium`, or `high` fit recommendation using the
-  job text, `resume.txt`, and `ideal_job.txt`
-- one row per `job_id + scoring_version` is upserted into `job_scores`
-
-Important current-state note:
-
-- `fit_recommendation` is stored separately and does not affect `total_score`
-- numeric scoring is currently based on rule evaluation only
-
-## Reporting
-
-Report generation lives in `app/reporting.py`.
-
-Reports are written to `config/reports/` as `.xlsx` files with:
-
-- `new` tab: jobs considered new since the latest export
-- `all` tab: all scored jobs above the configured threshold
-- `all_jobs_list` tab: optional full list of scorable jobs
-- a `Fit Recommendation` column sourced from `job_scores.fit_recommendation`
-
-The current report logic defines "new" like this:
-
-- read the most recent `exports.exported_at`
-- include rows where `jobs.first_seen_at > latest exported_at`
-
-That means the export reset lever is the `exports` table. Clearing only `export_jobs` does not reset what counts as new.
-
-## Database Schema
-
-The SQLite schema is defined in `app/db.py`.
-
-### `raw_requests`
-
-Stores every search page fetched from SerpApi.
-
-- `id`
-- `query_name`
-- `query_params_json`
-- `response_json`
-- `response_status`
-- `result_count`
-- `requested_at`
-
-### `jobs`
-
-Stores normalized and deduplicated jobs.
-
-- `id`
-- `source_job_id`
-- `title`
-- `company`
-- `location`
-- `description`
-- `apply_url`
-- `share_link`
-- `via`
-- `thumbnail`
-- `posted_at_text`
-- `schedule_type`
-- `work_from_home`
-- `qualifications_text`
-- `raw_job_json`
-- `apply_options_json`
-- `extensions_json`
-- `detected_extensions_json`
-- `job_highlights_json`
-- `date_posted`
-- `is_scorable`
-- `scorable_missing_fields_json`
-- `normalized_hash`
-- `first_seen_at`
-- `last_seen_at`
-
-### `job_scores`
-
-Stores one scoring row per job and scoring version.
-
-- `id`
-- `job_id`
-- `rule_score`
-- `fit_recommendation`
-- `total_score`
-- `llm_provider`
-- `llm_model`
-- `feature_results_json`
-- `breakdown_json`
-- `scoring_status`
-- `scoring_error`
-- `scoring_version`
-- `scored_at`
-
-### `exports`
-
-Stores report run history.
-
-- `id`
-- `exported_at`
-- `export_file_name`
-
-### `export_jobs`
-
-Stores the jobs included in a given export.
-
-- `id`
-- `export_id`
-- `job_id`
-
-## Scripts
-
-### Initialize the database
-
-```bash
-.venv/bin/python scripts/init_db.py
+```json
+{
+  "blacklist": [
+    "SynergisticIT"
+  ]
+}
 ```
 
-Creates or syncs the SQLite schema in `config/jobs.db`.
+Blacklist matching is exact after trim + lowercase normalization.
 
-### Run search ingestion
+### `config/resume.txt`
 
-```bash
-.venv/bin/python scripts/run_search.py
-```
+Plain text version of your resume for the fit recommendation pass.
 
-Runs all enabled queries, stores every raw page, and upserts jobs.
+### `config/ideal_job.txt`
 
-### Replay raw responses into jobs
+Plain text description of the kind of job you actually want.
 
-```bash
-.venv/bin/python scripts/upsert_jobs_from_raw.py
-```
+## Running it locally
 
-Useful for backfills if raw requests are already stored.
-
-### Recompute job scorable flags
+### 1. Install dependencies
 
 ```bash
-.venv/bin/python scripts/recompute_job_scorability.py
-```
-
-Rebuilds `jobs.is_scorable` and `jobs.scorable_missing_fields_json`.
-
-### Run scoring
-
-```bash
-.venv/bin/python scripts/run_scoring.py
-```
-
-Scores jobs using the current `config/scoring.json` rules and model.
-
-### Run report export
-
-```bash
-.venv/bin/python scripts/run_report.py
-```
-
-Builds a report workbook from scored jobs and records export metadata.
-
-### Score and export in one command
-
-```bash
-.venv/bin/python scripts/score_and_report.py
-```
-
-Runs scoring first, then writes a report.
-
-## Orchestrator
-
-The `orchestrator/` package is a thin profile runner around the worker code. It exists to support scheduled runs and email delivery.
-
-It currently reads:
-
-- `orchestrator/profiles.json` for profile definitions and paths
-- `orchestrator/state.json` for run timestamps and last-run status
-- `orchestrator/.env` for mail credentials and orchestrator-specific env
-
-The orchestrator pipeline calls the same worker logic used by the scripts:
-
-- search
-- scoring
-- report generation
-- optional email notification
-
-## Setup
-
-Create a virtualenv, install dependencies, and make sure these are available:
-
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Required runtime pieces:
+You will also need:
 
-- SerpApi key in `config/.env` as `SERPAPI_API_KEY=...`
-- Ollama running locally on `http://localhost:11434`
-- the model referenced by `config/scoring.json` pulled locally
+- a working SerpApi key
+- Ollama running locally
+- the models referenced in `config/scoring.json`
 
-## Current Design Principles
+### 2. Run the pipeline
 
-- keep the system local-first and inspectable
-- preserve every API response page historically
-- keep config close to the raw API request shape
-- use modular worker code with thin scripts
-- prefer simple, explicit flow over heavy abstraction
+The main local entrypoint is:
 
-## What Is Not Implemented Yet
+```bash
+python3 scripts/run_pipeline.py
+```
 
-These are still planned rather than live:
+That script prompts you to choose:
 
-- multi-resume routing
-- UI/dashboard
-- application tracking
-- interview/rejection workflow
-- auto-apply behavior
+- search only
+- scoring only
+- report only
+- search + scoring
+- scoring + report
+- search + scoring + report
+
+### 3. Check outputs
+
+After a run, the main things to look at are:
+
+- `config/jobs.db`
+- `config/reports/`
+- `config/worker.log`
+
+If something goes wrong during raw archival, also check:
+
+- `config/raw_response_backup/`
+
+## Utility scripts
+
+These are still useful, but they are not part of the main interactive runner.
+
+### Initialize or sync the DB
+
+```bash
+python3 scripts/init_db.py
+```
+
+### Recompute which jobs are scorable
+
+```bash
+python3 scripts/recompute_job_scorability.py
+```
+
+### Replay archived raw responses back into `jobs`
+
+```bash
+python3 scripts/upsert_jobs_from_raw.py
+```
+
+That last one is especially helpful if raw responses are intact but normalized job rows need to be rebuilt.
+
+## Database overview
+
+The main tables are:
+
+- `raw_requests`: every archived search page
+- `jobs`: normalized, deduped jobs
+- `job_scores`: one scoring row per `job_id + scoring_version`
+- `exports`: report history
+- `export_jobs`: which jobs were included in each export
+
+A couple of helpful notes:
+
+- `jobs.query_names_json` tracks which queries a job came from
+- `job_scores.scoring_status` can be things like `ok`, `failed`, or `blacklisted`
+- "new" jobs in the report are based on the latest row in `exports`, not `export_jobs`
+
+## Logging
+
+Worker logs go to `config/worker.log` and also print to the terminal.
+
+The logging is intentionally light and top-level. It covers things like:
+
+- queries starting and finishing
+- page/archive results
+- scoring progress
+- fit recommendation progress
+- report generation
+- script start/finish summaries
+
+It is meant to be useful when something breaks, without turning into a wall of noise.
+
+## Orchestrator
+
+There is also an orchestrator in `orchestrator/` for scheduled profile-based runs.
+
+That path is separate from the local interactive runner and is mainly for full automated runs. If you're just working on the system manually, start with `scripts/run_pipeline.py`.
+
+## A few honest rough edges
+
+This project is useful, but it is still a working tool rather than a polished product.
+
+Some current realities:
+
+- there are no real automated tests yet
+- Ollama model behavior can still be the main source of instability
+- `app/main.py` is basically an old local smoke script, not the real entrypoint
+- the repo is optimized for one person's workflow first
+
+## If you are picking this up later
+
+If you come back to this after a while and want the shortest possible path back in:
+
+1. Check `config/scoring.json`
+2. Check `config/queries.json`
+3. Make sure Ollama is running
+4. Run `python3 scripts/run_pipeline.py`
+5. Read `config/worker.log` if anything feels off
+
+That should be enough to get your bearings again without having to rediscover the whole codebase from scratch.
