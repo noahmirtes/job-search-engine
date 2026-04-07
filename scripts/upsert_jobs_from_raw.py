@@ -2,29 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from app.config import initialize_config
+from _script_runtime import load_local_worker_config
 from app.db import get_connection, init_db
 from app.jobs import upsert_jobs_from_raw_response_json
-from app.worker_logging import get_logger, log_worker_startup, setup_worker_logging
-from _default_paths import _default_paths
+from app.worker_logging import get_logger
 
 LOGGER = get_logger("scripts.upsert_jobs_from_raw")
 
 
 def main() -> None:
     """Replay raw requests into jobs using shared parse/hash/upsert logic."""
-    setup_worker_logging()
     try:
-        config = initialize_config(_default_paths(PROJECT_ROOT))
-        setup_worker_logging(config.paths.log_path)
-        log_worker_startup(config, context="upsert_jobs_from_raw")
+        config = load_local_worker_config(context="upsert_jobs_from_raw")
         LOGGER.info("Script start: upsert_jobs_from_raw")
         init_db(config.paths.db_path)
 
