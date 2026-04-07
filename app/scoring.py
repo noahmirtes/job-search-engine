@@ -82,7 +82,6 @@ def run_job_scoring(
     )
 
 
-
 # --------------------------- SCORING PASSES -------------------------- #
 
 def _run_rule_scoring_pass(
@@ -141,6 +140,7 @@ def _run_rule_scoring_pass(
                         })
 
                     if rule.terminate_options and result in rule.terminate_options:
+                        print(f"   DEALBREAKER -- {rule.name}")
                         break # exit rule scoring loop for jobs that hit the terminate option / dealbreaker
 
                 jobs_scored_ok += 1
@@ -202,6 +202,7 @@ def _run_fit_scoring_pass(
                 keep_alive=-1,
             )
             jobs_scored_ok += 1
+            print(f"   fit classification: {fit_recommendation}")
         except Exception:
             fit_recommendation = None
             jobs_failed += 1
