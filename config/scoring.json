@@ -6,7 +6,7 @@
     "fit_model": "gemma4:e2b",
     "rule_think": false,
     "fit_think": true,
-    "max_retries": 3
+    "max_retries": 8
   },
 
   "report": {
@@ -41,7 +41,7 @@
   },
   {
     "name": "non_remote_or_relocation_required",
-    "prompt": "Does this role clearly appear to be on-site, hybrid, location-bound, or require relocation rather than being fully remote within the United States?",
+    "prompt": "Is this job clearly NOT fully remote within the United States (for example: on-site, hybrid, location-restricted, or requires relocation)?",
     "score": -10,
     "result_options": ["true", "false"],
     "trigger_result": "true",
@@ -103,7 +103,16 @@
     "score": 1,
     "result_options": ["true", "false"],
     "trigger_result": "true"
-  }
+  },
+  {
+  "name": "no_strict_degree_requirement",
+  "prompt": "Does this job NOT clearly require a bachelor's degree in computer science or a related field (for example: degree is optional, preferred, equivalent experience allowed, or not mentioned)?",
+  "score": 3,
+  "result_options": ["true", "false"],
+  "trigger_result": "true"
+}
+
+
 ],
 
   "inactive_rules": [
