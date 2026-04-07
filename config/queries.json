@@ -1,6 +1,6 @@
 [
   {
-    "name": "junior_software_engineer",
+    "name": "junior_software_engineer_ltype",
     "enabled": true,
     "max_pages": 2,
     "request": {
@@ -14,7 +14,7 @@
     }
   },
   {
-    "name": "entry_level_software_engineer",
+    "name": "entry_level_software_engineer_ltype",
     "enabled": true,
     "max_pages": 2,
     "request": {
@@ -28,7 +28,7 @@
     }
   },
   {
-    "name": "software_engineer_i",
+    "name": "software_engineer_i_ltype",
     "enabled": true,
     "max_pages": 2,
     "request": {
@@ -42,7 +42,7 @@
     }
   },
   {
-    "name": "junior_backend_engineer",
+    "name": "junior_backend_engineer_ltype",
     "enabled": true,
     "max_pages": 2,
     "request": {
@@ -56,13 +56,40 @@
     }
   },
   {
-    "name": "entry_level_backend_engineer",
+    "name": "software_engineer_remote",
+    "enabled": true,
+    "max_pages": 2,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "software engineer remote",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "backend_engineer_remote",
+    "enabled": true,
+    "max_pages": 2,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "backend engineer remote",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+
+  {
+    "name": "software_developer_ltype",
     "enabled": true,
     "max_pages": 1,
     "request": {
       "engine": "google_jobs",
       "google_domain": "google.com",
-      "q": "entry level backend engineer",
+      "q": "software developer",
       "location": "United States",
       "ltype": "1",
       "hl": "en",
@@ -70,15 +97,146 @@
     }
   },
   {
-    "name": "junior_backend_developer",
+    "name": "backend_developer_ltype",
     "enabled": true,
     "max_pages": 1,
     "request": {
       "engine": "google_jobs",
       "google_domain": "google.com",
-      "q": "junior backend developer",
+      "q": "backend developer",
       "location": "United States",
       "ltype": "1",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "python_developer_remote",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "python developer remote",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "python_engineer_remote",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "python engineer remote",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "full_stack_engineer_remote",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "full stack engineer remote",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "platform_engineer_remote",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "platform engineer remote",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+
+  {
+    "name": "software_engineer_probe",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "software engineer",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "backend_engineer_probe",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "backend engineer",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "software_developer_probe",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "software developer",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "backend_developer_probe",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "backend developer",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "python_developer_probe",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "python developer",
+      "location": "United States",
+      "hl": "en",
+      "gl": "us"
+    }
+  },
+  {
+    "name": "python_engineer_probe",
+    "enabled": true,
+    "max_pages": 1,
+    "request": {
+      "engine": "google_jobs",
+      "google_domain": "google.com",
+      "q": "python engineer",
+      "location": "United States",
       "hl": "en",
       "gl": "us"
     }
