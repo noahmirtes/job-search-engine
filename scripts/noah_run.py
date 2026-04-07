@@ -9,23 +9,10 @@ CONFIG_DIR = Path("/Users/noah/REPOS/job-search-engine/config")
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.config import WorkerConfig, WorkerPaths, initialize_config
+from app.config import WorkerConfig, initialize_config
 from app.db import get_connection, init_db
-
+from _default_paths import _default_paths
 # ------------------------------------------------------------------- #
-
-def default_paths() -> WorkerPaths:
-    """Build the hard-coded local path mapping for Noah's runs."""
-    return WorkerPaths(
-        db_path=CONFIG_DIR / "jobs.db",
-        log_path=CONFIG_DIR / "worker.log",
-        queries_path=CONFIG_DIR / "queries.json",
-        scoring_path=CONFIG_DIR / "scoring.json",
-        ideal_job_path=CONFIG_DIR / "ideal_job.txt",
-        resume_path=CONFIG_DIR / "resume.txt",
-        env_path=CONFIG_DIR / ".env",
-        report_export_dir=CONFIG_DIR / "reports",
-    )
 
 def run_search(config: WorkerConfig) -> None:
     """Run search and print a compact stage summary."""
@@ -93,7 +80,7 @@ RESCORE_ALL = False
 
 def main() -> None:
     """Run the local pipeline from the hard-coded config directory."""
-    config = initialize_config(default_paths())
+    config = initialize_config(_default_paths())
     init_db(config.paths.db_path)
 
     if RUN_SEARCH:
