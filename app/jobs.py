@@ -36,6 +36,7 @@ class JobRecord:
     date_posted: str | None
     is_scorable: int
     scorable_missing_fields_json: str
+    query_names_json: str
     normalized_hash: str
 
 
@@ -44,6 +45,7 @@ def upsert_jobs_from_payload(
     payload: dict[str, Any],
     *,
     anchor_requested_at_utc: str,
+    query_name: str | None = None,
 ) -> int:
     """Parse payload jobs_results and upsert each job into the jobs table."""
     jobs_results = payload.get("jobs_results")
@@ -57,6 +59,7 @@ def upsert_jobs_from_payload(
         record = _to_job_record(
             raw_job,
             anchor_requested_at_utc=anchor_requested_at_utc,
+            query_name=query_name,
         )
         _upsert_job(connection, record)
         processed_count += 1
@@ -69,6 +72,7 @@ def upsert_jobs_from_raw_response_json(
     response_json: str,
     *,
     anchor_requested_at_utc: str,
+    query_name: str | None = None,
 ) -> int:
     """Decode raw response JSON and upsert contained jobs."""
     payload = json.loads(response_json)
@@ -78,6 +82,7 @@ def upsert_jobs_from_raw_response_json(
         connection,
         payload,
         anchor_requested_at_utc=anchor_requested_at_utc,
+        query_name=query_name,
     )
 
 
@@ -85,6 +90,7 @@ def _to_job_record(
     raw_job: dict[str, Any],
     *,
     anchor_requested_at_utc: str,
+    query_name: str | None = None,
 ) -> JobRecord:
     """Map a raw SerpApi job object into the normalized JobRecord shape."""
     source_job_id = _as_text(raw_job.get("job_id"))
@@ -158,17 +164,19 @@ def _to_job_record(
         date_posted=date_posted,
         is_scorable=is_scorable,
         scorable_missing_fields_json=json.dumps(missing_fields, sort_keys=True),
+        query_names_json=json.dumps(_normalize_query_names([query_name])),
         normalized_hash=normalized_hash,
     )
 
 
 def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
     """Insert or update a job record using source id/hash identity."""
-    existing_job_id = _find_existing_job_id(
+    existing_job_row = _find_existing_job_row(
         connection=connection,
         source_job_id=record.source_job_id,
         normalized_hash=record.normalized_hash,
     )
+    existing_job_id = None if existing_job_row is None else int(existing_job_row["id"])
 
     now = utc_now_iso()
     if existing_job_id is None:
@@ -196,10 +204,11 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
                 date_posted,
                 is_scorable,
                 scorable_missing_fields_json,
+                query_names_json,
                 normalized_hash,
                 first_seen_at,
                 last_seen_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.source_job_id,
@@ -223,12 +232,18 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
                 record.date_posted,
                 record.is_scorable,
                 record.scorable_missing_fields_json,
+                record.query_names_json,
                 record.normalized_hash,
                 now,
                 now,
             ),
         )
         return
+
+    merged_query_names_json = _merge_query_names_json(
+        existing_job_row["query_names_json"],
+        record.query_names_json,
+    )
 
     connection.execute(
         """
@@ -255,6 +270,7 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
             date_posted = ?,
             is_scorable = ?,
             scorable_missing_fields_json = ?,
+            query_names_json = ?,
             normalized_hash = ?,
             last_seen_at = ?
         WHERE id = ?
@@ -281,6 +297,7 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
             record.date_posted,
             record.is_scorable,
             record.scorable_missing_fields_json,
+            merged_query_names_json,
             record.normalized_hash,
             now,
             existing_job_id,
@@ -288,28 +305,26 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
     )
 
 
-def _find_existing_job_id(
+def _find_existing_job_row(
     connection: sqlite3.Connection,
     *,
     source_job_id: str | None,
     normalized_hash: str,
-) -> int | None:
-    """Find existing job by source id first, then fallback normalized hash."""
+) -> sqlite3.Row | None:
+    """Find existing job row by source id first, then fallback normalized hash."""
     if source_job_id:
         row = connection.execute(
-            "SELECT id FROM jobs WHERE source_job_id = ? LIMIT 1",
+            "SELECT id, query_names_json FROM jobs WHERE source_job_id = ? LIMIT 1",
             (source_job_id,),
         ).fetchone()
         if row is not None:
-            return int(row["id"] if isinstance(row, sqlite3.Row) else row[0])
+            return row if isinstance(row, sqlite3.Row) else None
 
     row = connection.execute(
-        "SELECT id FROM jobs WHERE normalized_hash = ? LIMIT 1",
+        "SELECT id, query_names_json FROM jobs WHERE normalized_hash = ? LIMIT 1",
         (normalized_hash,),
     ).fetchone()
-    if row is None:
-        return None
-    return int(row["id"] if isinstance(row, sqlite3.Row) else row[0])
+    return row if isinstance(row, sqlite3.Row) else None
 
 
 def _build_normalized_hash(
@@ -346,6 +361,48 @@ def _first_apply_url(apply_options: list[Any]) -> str | None:
         if link:
             return link
     return None
+
+
+def _merge_query_names_json(
+    existing_query_names_json: str | None,
+    incoming_query_names_json: str | None,
+) -> str:
+    """Merge ordered query source lists without duplicates."""
+    merged = _normalize_query_names(
+        _load_query_names_json(existing_query_names_json)
+        + _load_query_names_json(incoming_query_names_json)
+    )
+    return json.dumps(merged, sort_keys=False)
+
+
+def _load_query_names_json(raw_query_names_json: str | None) -> list[str]:
+    """Parse query_names_json into a normalized list."""
+    if not raw_query_names_json:
+        return []
+    try:
+        payload = json.loads(raw_query_names_json)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return _normalize_query_names(payload)
+
+
+def _normalize_query_names(values: list[Any]) -> list[str]:
+    """Trim, dedupe, and preserve first-seen query name order."""
+    normalized: list[str] = []
+    seen: set[str] = set()
+
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if not text or text in seen:
+            continue
+        normalized.append(text)
+        seen.add(text)
+
+    return normalized
 
 
 def _as_text(value: Any) -> str | None:

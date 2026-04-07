@@ -116,6 +116,7 @@ def _run_single_query(
                 connection,
                 attempt.payload,
                 anchor_requested_at_utc=requested_at,
+                query_name=attempt.query_name,
             )
     except Exception as exc:
         # Last-resort durability: persist unexpected iterator failures as synthetic raw rows.
