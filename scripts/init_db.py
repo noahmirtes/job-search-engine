@@ -7,23 +7,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.config import WorkerPaths, initialize_config
+from app.config import initialize_config
 from app.db import init_db
 
-
-def _default_paths(project_root: Path) -> WorkerPaths:
-    """Build default single-profile path mapping for local runs."""
-    config_dir = project_root / "config"
-    return WorkerPaths(
-        db_path=config_dir / "jobs.db",
-        log_path=config_dir / "worker.log",
-        queries_path=config_dir / "queries.json",
-        scoring_path=config_dir / "scoring.json",
-        ideal_job_path=config_dir / "ideal_job.txt",
-        resume_path=config_dir / "resume.txt",
-        env_path=config_dir / ".env",
-        report_export_dir=config_dir / "reports",
-    )
+from _default_paths import _default_paths
 
 
 def main() -> None:
