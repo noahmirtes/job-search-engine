@@ -59,6 +59,8 @@ class ScoringConfig:
     llm_rule_think: bool
     llm_fit_think: bool
     llm_max_retries: int
+    blacklist_companies: tuple[str, ...]
+    normalized_blacklist_companies: frozenset[str]
     report: "ScoringReportConfig"
     rules: list[ScoringRuleConfig]
 
@@ -294,6 +296,24 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
     if not isinstance(include_all_jobs_list, bool):
         raise ValueError("scoring.json report.include_all_jobs_list must be a boolean.")
 
+    blacklist = payload.get("blacklist", [])
+    if not isinstance(blacklist, list):
+        raise ValueError("scoring.json blacklist must be a list of company names.")
+
+    parsed_blacklist_companies: list[str] = []
+    normalized_blacklist_companies: set[str] = set()
+    for index, item in enumerate(blacklist):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(
+                f"scoring.json blacklist[{index}] must be a non-empty string."
+            )
+        company = item.strip()
+        normalized_company = _normalize_company_name(company)
+        if normalized_company in normalized_blacklist_companies:
+            continue
+        parsed_blacklist_companies.append(company)
+        normalized_blacklist_companies.add(normalized_company)
+
     rules = payload.get("rules", [])
     if not isinstance(rules, list) or not rules:
         raise ValueError("scoring.json rules must contain at least one rule.")
@@ -374,6 +394,8 @@ def _load_scoring_config(path: Path) -> ScoringConfig:
         llm_rule_think=rule_think,
         llm_fit_think=fit_think,
         llm_max_retries=max_retries,
+        blacklist_companies=tuple(parsed_blacklist_companies),
+        normalized_blacklist_companies=frozenset(normalized_blacklist_companies),
         report=ScoringReportConfig(
             threshold=threshold,
             include_all_jobs_list=include_all_jobs_list,
@@ -391,3 +413,8 @@ def _build_unique_rule_key(name: str, used_keys: set[str]) -> str:
         suffix += 1
     used_keys.add(key)
     return key
+
+
+def _normalize_company_name(value: str) -> str:
+    """Normalize company names for exact case-insensitive blacklist matching."""
+    return value.strip().lower()

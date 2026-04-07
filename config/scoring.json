@@ -14,6 +14,8 @@
     "include_all_jobs_list": true
   },
 
+  "blacklist": [],
+
   "rules": [
   {
     "name": "seniority_too_high",

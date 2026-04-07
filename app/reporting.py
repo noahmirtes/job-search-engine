@@ -226,13 +226,20 @@ def _fetch_all_jobs_rows(
            AND job_scores.scoring_version = ?
            AND job_scores.scoring_status = 'ok'
         WHERE jobs.is_scorable = 1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM job_scores AS blacklisted_scores
+              WHERE blacklisted_scores.job_id = jobs.id
+                AND blacklisted_scores.scoring_version = ?
+                AND blacklisted_scores.scoring_status = 'blacklisted'
+          )
         ORDER BY
             CASE WHEN job_scores.total_score IS NULL THEN 1 ELSE 0 END ASC,
             job_scores.total_score DESC,
             jobs.last_seen_at DESC,
             jobs.id DESC
         """,
-        (scoring_version,),
+        (scoring_version, scoring_version),
     ).fetchall()
     return [row for row in rows if isinstance(row, sqlite3.Row)]
 

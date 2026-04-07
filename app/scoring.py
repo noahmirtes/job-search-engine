@@ -38,6 +38,7 @@ class RulePassResult:
     jobs_scored_ok: int
     jobs_failed: int
     successful_rows: list[sqlite3.Row]
+    model_used: bool
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class FitPassResult:
     jobs_attempted: int
     jobs_scored_ok: int
     jobs_failed: int
+    model_used: bool
 
 
 # ------------------------- SCORING ENTRYPOINT ------------------------ #
@@ -72,10 +74,17 @@ def run_job_scoring(
     )
 
     rule_pass = _run_rule_scoring_pass(connection, config, rows)
+    fit_pass = FitPassResult(
+        jobs_attempted=0,
+        jobs_scored_ok=0,
+        jobs_failed=0,
+        model_used=False,
+    )
     try:
         fit_pass = _run_fit_scoring_pass(connection, config, rule_pass.successful_rows)
     finally:
-        unload_model(settings.llm_fit_model)
+        if fit_pass.model_used:
+            unload_model(settings.llm_fit_model)
 
     summary = ScoringRunSummary(
         scoring_version=settings.version,
@@ -115,10 +124,13 @@ def _run_rule_scoring_pass(
     jobs_scored_ok = 0
     jobs_failed = 0
     successful_rows: list[sqlite3.Row] = []
+    blacklisted_count = 0
+    model_used = False
 
     try:
         for row in rows:
             job_id = int(row["id"])
+            company = _safe_text(row["company"])
             job_text = _build_job_text(row)
 
             feature_results: dict[str, str] = {}
@@ -128,7 +140,33 @@ def _run_rule_scoring_pass(
             error_message: str | None = None
             LOGGER.info("Rule scoring start: job_id=%s", job_id)
 
+            if _is_blacklisted_company(company, settings.normalized_blacklist_companies):
+                status = "blacklisted"
+                error_message = f"Company blacklisted: {company}"
+                blacklisted_count += 1
+                _upsert_rule_score(
+                    connection=connection,
+                    job_id=job_id,
+                    rule_score=rule_score_total,
+                    total_score=rule_score_total,
+                    llm_provider=settings.llm_provider,
+                    llm_model=settings.llm_rule_model,
+                    feature_results=feature_results,
+                    breakdown=breakdown,
+                    scoring_status=status,
+                    scoring_error=error_message,
+                    scoring_version=settings.version,
+                )
+                LOGGER.info(
+                    "Rule scoring skipped: job_id=%s status=%s company=%s",
+                    job_id,
+                    status,
+                    company,
+                )
+                continue
+
             try:
+                model_used = True
                 for rule in settings.rules:
                     result = classify_rule_result(
                         model=settings.llm_rule_model,
@@ -197,12 +235,17 @@ def _run_rule_scoring_pass(
                     error_message,
                 )
     finally:
-        unload_model(settings.llm_rule_model)
+        if model_used:
+            unload_model(settings.llm_rule_model)
+
+    if blacklisted_count:
+        LOGGER.info("Blacklist skips during rule scoring: count=%s", blacklisted_count)
 
     return RulePassResult(
         jobs_scored_ok=jobs_scored_ok,
         jobs_failed=jobs_failed,
         successful_rows=successful_rows,
+        model_used=model_used,
     )
 
 
@@ -216,6 +259,7 @@ def _run_fit_scoring_pass(
     jobs_attempted = 0
     jobs_scored_ok = 0
     jobs_failed = 0
+    model_used = False
 
     for row in rows:
         job_id = int(row["id"])
@@ -225,6 +269,7 @@ def _run_fit_scoring_pass(
         jobs_attempted += 1
 
         try:
+            model_used = True
             fit_recommendation = classify_fit_recommendation(
                 model=settings.llm_fit_model,
                 job_text=job_text,
@@ -261,6 +306,7 @@ def _run_fit_scoring_pass(
         jobs_attempted=jobs_attempted,
         jobs_scored_ok=jobs_scored_ok,
         jobs_failed=jobs_failed,
+        model_used=model_used,
     )
 
 
@@ -384,6 +430,16 @@ def _safe_text(value: Any) -> str:
     return text if text else "N/A"
 
 
+def _is_blacklisted_company(
+    company_name: str,
+    normalized_blacklist_companies: frozenset[str],
+) -> bool:
+    """Return True when a company matches the configured blacklist exactly."""
+    if company_name == "N/A":
+        return False
+    return company_name.strip().lower() in normalized_blacklist_companies
+
+
 # ----------------------------- DB WRITES ----------------------------- #
 
 def _upsert_rule_score(
@@ -406,6 +462,7 @@ def _upsert_rule_score(
         INSERT INTO job_scores (
             job_id,
             rule_score,
+            fit_recommendation,
             total_score,
             llm_provider,
             llm_model,
@@ -415,10 +472,11 @@ def _upsert_rule_score(
             scoring_error,
             scoring_version,
             scored_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_id, scoring_version)
         DO UPDATE SET
             rule_score = excluded.rule_score,
+            fit_recommendation = excluded.fit_recommendation,
             total_score = excluded.total_score,
             llm_provider = excluded.llm_provider,
             llm_model = excluded.llm_model,
@@ -431,6 +489,7 @@ def _upsert_rule_score(
         (
             job_id,
             rule_score,
+            None,
             total_score,
             llm_provider,
             llm_model,
