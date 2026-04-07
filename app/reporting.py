@@ -10,9 +10,54 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 from app.config import WorkerConfig
 from app.db import utc_now_iso
+
+
+PASTEL_SECTION_STYLES = {
+    "metadata": {
+        "header_fill": PatternFill(fill_type="solid", fgColor="D9EAF7"),
+        "body_fill": PatternFill(fill_type="solid", fgColor="F5FAFE"),
+    },
+    "details": {
+        "header_fill": PatternFill(fill_type="solid", fgColor="E3F1DD"),
+        "body_fill": PatternFill(fill_type="solid", fgColor="F7FBF4"),
+    },
+    "apply": {
+        "header_fill": PatternFill(fill_type="solid", fgColor="F8E199"),
+        "body_fill": PatternFill(fill_type="solid", fgColor="FFFECC"),
+    },
+}
+HEADER_FONT = Font(bold=True, color="3F4E5A")
+BODY_FONT = Font(color="4A4A4A")
+THIN_BORDER = Border(
+    left=Side(style="thin", color="E4E8EC"),
+    right=Side(style="thin", color="E4E8EC"),
+    top=Side(style="thin", color="E4E8EC"),
+    bottom=Side(style="thin", color="E4E8EC"),
+)
+DEFAULT_ALIGNMENT = Alignment(vertical="top")
+HEADER_ALIGNMENT = Alignment(vertical="center", wrap_text=True)
+WRAP_ALIGNMENT = Alignment(vertical="top", wrap_text=False)
+WRAPPED_COLUMNS = {"Description", "Qualifications", "Source Queries"}
+COLUMN_WIDTH_CAPS = {
+    "Job ID": 10,
+    "Score": 10,
+    "Fit Recommendation": 22,
+    "Source Queries": 30,
+    "Title": 36,
+    "Company": 28,
+    "Location": 24,
+    "Description": 60,
+    "Date Posted": 14,
+    "Schedule Type": 18,
+    "Qualifications": 44,
+    "Extensions": 26,
+    "Detected Extensions": 28,
+}
 
 
 @dataclass(frozen=True)
@@ -24,6 +69,14 @@ class ReportRunSummary:
     new_count: int
     all_count: int
     all_jobs_list_count: int
+
+
+@dataclass(frozen=True)
+class ReportSheetPayload:
+    """Sheet-ready table plus hyperlink metadata for apply columns."""
+
+    dataframe: pd.DataFrame
+    apply_links_by_row: list[dict[str, str]]
 
 
 def generate_report(
@@ -104,6 +157,7 @@ def _fetch_scored_rows(
             jobs.extensions_json,
             jobs.detected_extensions_json,
             jobs.apply_options_json,
+            jobs.query_names_json,
             jobs.first_seen_at,
             jobs.last_seen_at,
             job_scores.total_score,
@@ -143,6 +197,7 @@ def _fetch_all_jobs_rows(
             jobs.extensions_json,
             jobs.detected_extensions_json,
             jobs.apply_options_json,
+            jobs.query_names_json,
             jobs.first_seen_at,
             jobs.last_seen_at,
             job_scores.total_score,
@@ -185,20 +240,23 @@ def _write_report_workbook(
 ) -> None:
     """Write Excel workbook with required tabs and dynamic apply columns."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet_payloads: list[tuple[str, ReportSheetPayload]] = [
+        ("new", _build_sheet_payload(new_rows)),
+        ("all", _build_sheet_payload(all_rows)),
+    ]
+    if include_all_jobs_list:
+        sheet_payloads.append(("all_jobs_list", _build_sheet_payload(all_jobs_list_rows)))
 
     with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
-        _to_dataframe(new_rows).to_excel(writer, sheet_name="new", index=False)
-        _to_dataframe(all_rows).to_excel(writer, sheet_name="all", index=False)
-        if include_all_jobs_list:
-            _to_dataframe(all_jobs_list_rows).to_excel(
-                writer,
-                sheet_name="all_jobs_list",
-                index=False,
-            )
+        for sheet_name, payload in sheet_payloads:
+            payload.dataframe.to_excel(writer, sheet_name=sheet_name, index=False)
+            worksheet = writer.sheets[sheet_name]
+            _style_worksheet(worksheet)
+            _apply_sheet_hyperlinks(worksheet, payload)
 
 
-def _to_dataframe(rows: list[sqlite3.Row]) -> pd.DataFrame:
-    """Convert DB rows into report-ready rows with trailing apply-option columns."""
+def _build_sheet_payload(rows: list[sqlite3.Row]) -> ReportSheetPayload:
+    """Build report rows plus hyperlink metadata for one workbook sheet."""
     max_apply_options = 0
     parsed_options_by_job: dict[int, list[tuple[str, str]]] = {}
 
@@ -212,6 +270,7 @@ def _to_dataframe(rows: list[sqlite3.Row]) -> pd.DataFrame:
         "Job ID",
         "Score",
         "Fit Recommendation",
+        "Source Queries",
         "Title",
         "Company",
         "Location",
@@ -224,17 +283,19 @@ def _to_dataframe(rows: list[sqlite3.Row]) -> pd.DataFrame:
     ]
     for index in range(1, max_apply_options + 1):
         columns.append(f"Apply Location {index}")
-        columns.append(f"Apply Link {index}")
 
     records: list[dict[str, Any]] = []
+    apply_links_by_row: list[dict[str, str]] = []
     for row in rows:
         job_id = int(row["job_id"])
         options = parsed_options_by_job[job_id]
+        row_links: dict[str, str] = {}
 
         record: dict[str, Any] = {
             "Job ID": job_id,
             "Score": row["total_score"],
             "Fit Recommendation": _as_text(row["fit_recommendation"]) or "",
+            "Source Queries": _format_query_names(row["query_names_json"]),
             "Title": _as_text(row["title"]) or "",
             "Company": _as_text(row["company"]) or "",
             "Location": _as_text(row["location"]) or "",
@@ -252,12 +313,106 @@ def _to_dataframe(rows: list[sqlite3.Row]) -> pd.DataFrame:
                 apply_location, apply_link = options[index]
             else:
                 apply_location, apply_link = "", ""
-            record[f"Apply Location {column_index}"] = apply_location
-            record[f"Apply Link {column_index}"] = apply_link
+            column_name = f"Apply Location {column_index}"
+            display_value = apply_location or (f"Apply Link {column_index}" if apply_link else "")
+            record[column_name] = display_value
+            if apply_link:
+                row_links[column_name] = apply_link
 
         records.append(record)
+        apply_links_by_row.append(row_links)
 
-    return pd.DataFrame(records, columns=columns)
+    return ReportSheetPayload(
+        dataframe=pd.DataFrame(records, columns=columns),
+        apply_links_by_row=apply_links_by_row,
+    )
+
+
+def _apply_sheet_hyperlinks(worksheet: Any, payload: ReportSheetPayload) -> None:
+    """Attach hyperlink targets to apply-location cells after sheet write."""
+    header_names = [cell.value for cell in worksheet[1]]
+    header_index = {
+        str(name): position
+        for position, name in enumerate(header_names, start=1)
+        if isinstance(name, str)
+    }
+
+    for row_offset, row_links in enumerate(payload.apply_links_by_row, start=2):
+        for column_name, link in row_links.items():
+            column_index = header_index.get(column_name)
+            if column_index is None:
+                continue
+            cell = worksheet.cell(row=row_offset, column=column_index)
+            cell.hyperlink = link
+            cell.font = Font(color="0563C1", underline="single")
+
+
+def _style_worksheet(worksheet: Any) -> None:
+    """Apply pastel section styling and usability formatting to one sheet."""
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+    worksheet.sheet_view.showGridLines = False
+    worksheet.row_dimensions[1].height = 24
+
+    header_names = [cell.value for cell in worksheet[1]]
+    for column_index, header_value in enumerate(header_names, start=1):
+        header = header_value if isinstance(header_value, str) else ""
+        family = _column_family(header)
+        fills = PASTEL_SECTION_STYLES[family]
+        column_letter = get_column_letter(column_index)
+
+        header_cell = worksheet.cell(row=1, column=column_index)
+        header_cell.fill = fills["header_fill"]
+        header_cell.font = HEADER_FONT
+        header_cell.alignment = HEADER_ALIGNMENT
+        header_cell.border = THIN_BORDER
+
+        for row_index in range(2, worksheet.max_row + 1):
+            cell = worksheet.cell(row=row_index, column=column_index)
+            cell.fill = fills["body_fill"]
+            cell.font = BODY_FONT
+            cell.alignment = WRAP_ALIGNMENT if header in WRAPPED_COLUMNS else DEFAULT_ALIGNMENT
+            cell.border = THIN_BORDER
+
+        worksheet.column_dimensions[column_letter].width = _compute_column_width(
+            worksheet,
+            column_index,
+            header,
+        )
+
+
+def _column_family(header: str) -> str:
+    """Group columns into styling families."""
+    if header.startswith("Apply Location "):
+        return "apply"
+    if header in {
+        "Job ID",
+        "Score",
+        "Fit Recommendation",
+        "Source Queries",
+        "Date Posted",
+        "Schedule Type",
+    }:
+        return "metadata"
+    return "details"
+
+
+def _compute_column_width(
+    worksheet: Any,
+    column_index: int,
+    header: str,
+) -> float:
+    """Auto-size one column with a per-column max width cap."""
+    width_cap = 20 if header.startswith("Apply Location ") else COLUMN_WIDTH_CAPS.get(header, 24)
+    max_length = len(header)
+
+    for row_index in range(2, worksheet.max_row + 1):
+        value = worksheet.cell(row=row_index, column=column_index).value
+        if value is None:
+            continue
+        max_length = max(max_length, len(str(value).strip()))
+
+    return min(max(max_length + 2, 10), width_cap)
 
 
 def _parse_apply_options(raw_apply_options_json: str | None) -> list[tuple[str, str]]:
@@ -294,6 +449,27 @@ def _parse_apply_options(raw_apply_options_json: str | None) -> list[tuple[str, 
             items.append((location, link))
 
     return items
+
+
+def _format_query_names(raw_query_names_json: str | None) -> str:
+    """Render stored query names JSON as a report-friendly string."""
+    if not raw_query_names_json:
+        return ""
+    try:
+        payload = json.loads(raw_query_names_json)
+    except json.JSONDecodeError:
+        return ""
+
+    if not isinstance(payload, list):
+        return ""
+
+    query_names = []
+    for value in payload:
+        text = _as_text(value)
+        if text:
+            query_names.append(text)
+
+    return ", ".join(query_names)
 
 
 def _build_report_file_name() -> str:
