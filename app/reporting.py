@@ -15,6 +15,7 @@ from openpyxl.utils import get_column_letter
 
 from app.config import WorkerConfig
 from app.db import utc_now_iso
+from app.worker_logging import get_logger
 
 
 PASTEL_SECTION_STYLES = {
@@ -58,6 +59,7 @@ COLUMN_WIDTH_CAPS = {
     "Extensions": 26,
     "Detected Extensions": 28,
 }
+LOGGER = get_logger("reporting")
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,12 @@ def generate_report(
     scoring_version = config.scoring_config.version
     threshold = config.scoring_config.report.threshold
     include_all_jobs_list = config.scoring_config.report.include_all_jobs_list
+    LOGGER.info(
+        "Report generation start: version=%s threshold=%s include_all_jobs_list=%s",
+        scoring_version,
+        threshold,
+        include_all_jobs_list,
+    )
 
     all_rows = _fetch_scored_rows(
         connection=connection,
@@ -127,13 +135,22 @@ def generate_report(
         job_ids=[int(row["job_id"]) for row in new_rows],
     )
 
-    return ReportRunSummary(
+    summary = ReportRunSummary(
         export_id=export_id,
         export_path=report_path,
         new_count=len(new_rows),
         all_count=len(all_rows),
         all_jobs_list_count=len(all_jobs_list_rows),
     )
+    LOGGER.info(
+        "Report generation complete: export_id=%s path=%s new_rows=%s all_rows=%s all_jobs_list_rows=%s",
+        summary.export_id,
+        summary.export_path,
+        summary.new_count,
+        summary.all_count,
+        summary.all_jobs_list_count,
+    )
+    return summary
 
 
 def _fetch_scored_rows(

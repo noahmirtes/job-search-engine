@@ -9,7 +9,10 @@ from app.config import QueryConfig, WorkerConfig
 from app.db import get_connection, init_db, log_raw_request, utc_now_iso
 from app.jobs import upsert_jobs_from_payload
 from app.serpapi import SerpApiService
+from app.worker_logging import get_logger
 """
+
+LOGGER = get_logger("search")
 Notes:
 I'm looking at this script and it seems kinda weird to me how the call is happening with the connection integrated inside it
 I think a better way to do this would be to run each request and if it succeeds, add it to a list, if it fails mark it
@@ -47,6 +50,7 @@ def run_enabled_queries(config: WorkerConfig) -> SearchRunSummary:
 
     init_db(config.paths.db_path)
     service = SerpApiService(api_key=config.serpapi_api_key)
+    LOGGER.info("Search run start: enabled_queries=%s", len(enabled_queries))
 
     query_summaries: list[QueryRunSummary] = []
     total_pages_fetched = 0
@@ -63,7 +67,7 @@ def run_enabled_queries(config: WorkerConfig) -> SearchRunSummary:
             total_jobs_upserted += summary.jobs_upserted
             total_error_count += summary.error_count
 
-    return SearchRunSummary(
+    summary = SearchRunSummary(
         queries_run=len(query_summaries),
         total_pages_fetched=total_pages_fetched,
         total_raw_requests_stored=total_raw_requests_stored,
@@ -71,6 +75,15 @@ def run_enabled_queries(config: WorkerConfig) -> SearchRunSummary:
         total_error_count=total_error_count,
         query_summaries=query_summaries,
     )
+    LOGGER.info(
+        "Search run complete: queries_run=%s pages_fetched=%s raw_requests=%s jobs_upserted=%s errors=%s",
+        summary.queries_run,
+        summary.total_pages_fetched,
+        summary.total_raw_requests_stored,
+        summary.total_jobs_upserted,
+        summary.total_error_count,
+    )
+    return summary
 
 
 def _run_single_query(
@@ -79,6 +92,7 @@ def _run_single_query(
     query: QueryConfig,
 ) -> QueryRunSummary:
     """Execute one query attempt-by-attempt and persist each attempt immediately."""
+    LOGGER.info("Query start: query=%s max_pages=%s", query.name, query.max_pages)
     stored_request_ids: list[int] = []
     jobs_upserted = 0
     pages_fetched = 0
@@ -92,6 +106,7 @@ def _run_single_query(
     )
     try:
         for attempt in attempts:
+            page_jobs_upserted = 0
             requested_at = utc_now_iso()
             request_id = log_raw_request(
                 connection,
@@ -110,13 +125,31 @@ def _run_single_query(
             if attempt.is_error:
                 error_count += 1
                 last_error_message = attempt.error_message
+                LOGGER.warning(
+                    "Query page result: query=%s page=%s status=%s request_id=%s jobs_upserted=%s error=%s",
+                    attempt.query_name,
+                    attempt.page_number,
+                    attempt.response_status,
+                    request_id,
+                    page_jobs_upserted,
+                    attempt.error_message or "",
+                )
                 break
 
-            jobs_upserted += upsert_jobs_from_payload(
+            page_jobs_upserted = upsert_jobs_from_payload(
                 connection,
                 attempt.payload,
                 anchor_requested_at_utc=requested_at,
                 query_name=attempt.query_name,
+            )
+            jobs_upserted += page_jobs_upserted
+            LOGGER.info(
+                "Query page result: query=%s page=%s status=%s request_id=%s jobs_upserted=%s",
+                attempt.query_name,
+                attempt.page_number,
+                attempt.response_status,
+                request_id,
+                page_jobs_upserted,
             )
     except Exception as exc:
         # Last-resort durability: persist unexpected iterator failures as synthetic raw rows.
@@ -138,9 +171,16 @@ def _run_single_query(
         stored_request_ids.append(request_id)
         pages_fetched += 1
         error_count += 1
+        LOGGER.error(
+            "Query iteration failed: query=%s status=%s request_id=%s error=%s",
+            query.name,
+            500,
+            request_id,
+            last_error_message,
+        )
 
 
-    return QueryRunSummary(
+    summary = QueryRunSummary(
         query_name=query.name,
         pages_fetched=pages_fetched,
         stored_request_ids=stored_request_ids,
@@ -148,3 +188,12 @@ def _run_single_query(
         error_count=error_count,
         last_error_message=last_error_message,
     )
+    LOGGER.info(
+        "Query complete: query=%s pages_fetched=%s stored_requests=%s jobs_upserted=%s errors=%s",
+        summary.query_name,
+        summary.pages_fetched,
+        len(summary.stored_request_ids),
+        summary.jobs_upserted,
+        summary.error_count,
+    )
+    return summary

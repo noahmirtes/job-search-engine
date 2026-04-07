@@ -10,7 +10,10 @@ from typing import Any
 from app.config import WorkerConfig
 from app.db import utc_now_iso
 from app.ollama import classify_fit_recommendation, classify_rule_result, unload_model
-from time import monotonic # temp import to see how long scoring takes
+from app.worker_logging import get_logger
+
+
+LOGGER = get_logger("scoring")
 
 # ------------------------------ MODELS ------------------------------ #
 
@@ -60,6 +63,13 @@ def run_job_scoring(
         scoring_version=settings.version,
         only_unscored=only_unscored,
     )
+    LOGGER.info(
+        "Scoring run start: version=%s rule_model=%s fit_model=%s jobs_selected=%s",
+        settings.version,
+        settings.llm_rule_model,
+        settings.llm_fit_model,
+        len(rows),
+    )
 
     rule_pass = _run_rule_scoring_pass(connection, config, rows)
     try:
@@ -67,7 +77,7 @@ def run_job_scoring(
     finally:
         unload_model(settings.llm_fit_model)
 
-    return ScoringRunSummary(
+    summary = ScoringRunSummary(
         scoring_version=settings.version,
         llm_provider=settings.llm_provider,
         llm_model=settings.llm_rule_model,
@@ -80,6 +90,17 @@ def run_job_scoring(
         fit_jobs_scored_ok=fit_pass.jobs_scored_ok,
         fit_jobs_failed=fit_pass.jobs_failed,
     )
+    LOGGER.info(
+        "Scoring run complete: version=%s jobs_selected=%s rule_ok=%s rule_failed=%s fit_attempted=%s fit_ok=%s fit_failed=%s",
+        summary.scoring_version,
+        summary.jobs_selected,
+        summary.jobs_scored_ok,
+        summary.jobs_failed,
+        summary.fit_jobs_attempted,
+        summary.fit_jobs_scored_ok,
+        summary.fit_jobs_failed,
+    )
+    return summary
 
 
 # --------------------------- SCORING PASSES -------------------------- #
@@ -105,11 +126,10 @@ def _run_rule_scoring_pass(
             rule_score_total = 0.0
             status = "ok"
             error_message: str | None = None
-            print(f"scoring rules for job_id {job_id}")
+            LOGGER.info("Rule scoring start: job_id=%s", job_id)
 
             try:
                 for rule in settings.rules:
-                    start_time = monotonic() # temp
                     result = classify_rule_result(
                         model=settings.llm_rule_model,
                         job_text=job_text,
@@ -119,7 +139,6 @@ def _run_rule_scoring_pass(
                         max_retries=settings.llm_max_retries,
                         keep_alive=-1,
                     )
-                    print(f"   job rule {rule.name} scored in {monotonic() - start_time} sec") # temp
 
                     feature_results[rule.key] = result
 
@@ -140,7 +159,6 @@ def _run_rule_scoring_pass(
                         })
 
                     if rule.terminate_options and result in rule.terminate_options:
-                        print(f"   DEALBREAKER -- {rule.name}")
                         break # exit rule scoring loop for jobs that hit the terminate option / dealbreaker
 
                 jobs_scored_ok += 1
@@ -163,6 +181,21 @@ def _run_rule_scoring_pass(
                 scoring_error=error_message,
                 scoring_version=settings.version,
             )
+            if status == "ok":
+                LOGGER.info(
+                    "Rule scoring complete: job_id=%s status=%s score=%s",
+                    job_id,
+                    status,
+                    rule_score_total,
+                )
+            else:
+                LOGGER.error(
+                    "Rule scoring complete: job_id=%s status=%s score=%s error=%s",
+                    job_id,
+                    status,
+                    rule_score_total,
+                    error_message,
+                )
     finally:
         unload_model(settings.llm_rule_model)
 
@@ -188,7 +221,7 @@ def _run_fit_scoring_pass(
         job_id = int(row["id"])
         job_text = _build_job_text(row)
         fit_recommendation: str | None = None
-        print(f"scoring fit for job_id {job_id}")
+        LOGGER.info("Fit scoring start: job_id=%s", job_id)
         jobs_attempted += 1
 
         try:
@@ -202,10 +235,20 @@ def _run_fit_scoring_pass(
                 keep_alive=-1,
             )
             jobs_scored_ok += 1
-            print(f"   fit classification: {fit_recommendation}")
-        except Exception:
+        except Exception as exc:
             fit_recommendation = None
             jobs_failed += 1
+            LOGGER.error(
+                "Fit scoring complete: job_id=%s status=failed error=%s",
+                job_id,
+                str(exc).strip()[:4000] or "Unknown fit scoring error.",
+            )
+        else:
+            LOGGER.info(
+                "Fit scoring complete: job_id=%s status=ok fit_recommendation=%s",
+                job_id,
+                fit_recommendation,
+            )
 
         _update_fit_recommendation(
             connection=connection,
