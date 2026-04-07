@@ -1,24 +1,8 @@
-{
-  "version": "v3",
-  "llm": {
-    "provider": "ollama",
-    "rule_model": "gemma3:4b",
-    "fit_model": "gemma4:e2b",
-    "rule_think": false,
-    "fit_think": true,
-    "max_retries": 3
-  },
-
-  "report": {
-    "threshold": 0,
-    "include_all_jobs_list": true
-  },
-
-  "rules": [
+[
   {
     "name": "seniority_too_high",
     "prompt": "Does this role clearly target senior, staff, lead, principal, architect, manager, or otherwise advanced-level software engineers?",
-    "score": -10,
+    "score": -100,
     "result_options": ["true", "false"],
     "trigger_result": "true",
     "terminate_options": ["true"]
@@ -26,7 +10,7 @@
   {
     "name": "experience_too_high",
     "prompt": "Does this role clearly require more than 4 years of professional software engineering experience?",
-    "score": -8,
+    "score": -80,
     "result_options": ["true", "false"],
     "trigger_result": "true",
     "terminate_options": ["true"]
@@ -34,7 +18,7 @@
   {
     "name": "frontend_primary",
     "prompt": "Is this role primarily focused on frontend development such as React, UI work, styling, design systems, or client-side web development?",
-    "score": -10,
+    "score": -100,
     "result_options": ["true", "false"],
     "trigger_result": "true",
     "terminate_options": ["true"]
@@ -42,7 +26,7 @@
   {
     "name": "non_remote_or_relocation_required",
     "prompt": "Does this role clearly appear to be on-site, hybrid, location-bound, or require relocation rather than being fully remote within the United States?",
-    "score": -10,
+    "score": -90,
     "result_options": ["true", "false"],
     "trigger_result": "true",
     "terminate_options": ["true"]
@@ -50,7 +34,7 @@
   {
     "name": "contract_only",
     "prompt": "Is this role clearly contract-only, temporary, freelance, or otherwise not a full-time permanent position?",
-    "score": -10,
+    "score": -90,
     "result_options": ["true", "false"],
     "trigger_result": "true",
     "terminate_options": ["true"]
@@ -58,111 +42,50 @@
   {
     "name": "junior_or_entry_level",
     "prompt": "Is this clearly a junior, entry-level, associate, new grad, or Software Engineer I role, or otherwise obviously targeted at early-career candidates?",
-    "score": 3,
+    "score": 45,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   },
   {
     "name": "attainable_generalist_role",
     "prompt": "Even if not explicitly labeled junior, does this role appear realistically attainable for an early-career software engineer based on its responsibilities and requirements?",
-    "score": 2,
+    "score": 25,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   },
   {
     "name": "backend_primary",
     "prompt": "Is this role primarily focused on backend development, APIs, services, databases, business logic, integrations, or server-side systems?",
-    "score": 3,
+    "score": 30,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   },
   {
     "name": "full_stack_penalty",
     "prompt": "Is this role clearly full-stack with meaningful frontend responsibilities, even if it is not primarily frontend?",
-    "score": -2,
+    "score": -20,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   },
   {
     "name": "python_bonus",
     "prompt": "Does this role explicitly use, require, or prefer Python?",
-    "score": 1,
+    "score": 15,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   },
   {
     "name": "remote_confirmed",
     "prompt": "Does this posting clearly indicate that the role is fully remote within the United States?",
-    "score": 3,
+    "score": 30,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   },
   {
     "name": "full_time_confirmed",
     "prompt": "Does this posting clearly indicate that the role is a full-time position?",
-    "score": 1,
+    "score": 10,
     "result_options": ["true", "false"],
     "trigger_result": "true"
   }
-],
-
-  "inactive_rules": [
-    {
-      "name": "internship_role",
-      "prompt": "Is this an internship or co-op position rather than a full-time role?",
-      "score": -30,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "database_work",
-      "prompt": "Does the role involve working with databases (SQL or NoSQL)?",
-      "score": 5,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "non_software_role",
-      "prompt": "Is this NOT a software engineering role (e.g., IT support, QA tester without coding, analyst, etc.)?",
-      "score": -50,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "api_or_services_work",
-      "prompt": "Does the role involve building APIs, services, or backend systems?",
-      "score": 10,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "fullstack_backend_leaning",
-      "prompt": "Is this a full-stack role with a strong emphasis on backend work rather than frontend?",
-      "score": 10,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "contract_role",
-      "prompt": "Is this a contract or temporary role rather than full-time employment?",
-      "score": -15,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "senior_or_above",
-      "prompt": "Is this a senior, staff, principal, or lead role?",
-      "score": -100,
-      "result_options": ["true", "false"],
-      "trigger_result": "true",
-      "terminate_options" : ["false"]
-    },
-    {
-      "name": "devops_or_platform",
-      "prompt": "Is this primarily a DevOps, infrastructure, or platform engineering role rather than application development?",
-      "score": -10,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    }
-  ]
-}
+]
