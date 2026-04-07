@@ -1,1 +1,19 @@
-Describe the target role here for future embedding comparisons.
+Looking for a junior / entry-level software engineering role.
+
+Target roles:
+- Software Engineer I, Junior Software Engineer, Entry-Level Developer, New Grad roles
+
+Focus:
+- Backend development (APIs, services, server-side logic, databases)
+- General software engineering, not specialized roles
+
+Avoid:
+- Frontend-heavy roles (React, UI/UX, styling)
+- DevOps, infrastructure, IT support, QA-only, data/analyst roles
+- Senior, staff, lead, or mid-level positions
+- Roles requiring more than 3 years of experience
+- Internships or co-op positions
+
+Preferences:
+- Python is a strong plus
+- Role must be fully remote (U.S.)

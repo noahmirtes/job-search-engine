@@ -1,1 +1,45 @@
-Paste resume text here for future embedding comparisons.
+EXPERIENCE
+Total Metadata, Full Stack Developer | April 2025 - Present
+- Developing a full-stack platform for music library data and asset management supporting internal
+workflows and client deliveries.
+- Designing and shipping internal tools for ingestion, validation, and delivery of large metadata and audio
+datasets.
+- Developing backend modules for data conversion, metadata validation, and file management.
+- Working across staging and pre-production environments, including deployment and operational
+debugging.
+- Collaborating with the team on system design, feature planning, and technical documentation.
+- Implementing and maintaining AWS-based infrastructure supporting internal tools and data pipelines.
+
+Howling Music, Technical Director – Backend & Systems Development | Sept 2020 – July 2025
+- Served as the sole technical owner of internal data and audio processing systems supporting a large music
+catalog and delivery pipeline.
+- Designed and implemented custom Python-based automation systems to process metadata, audio assets,
+artwork, and platform exports at scale.
+- Built robust data pipelines for track metadata, composer splits, identifiers, versioning, and tagging,
+including strict validation and consistency checks.
+- Developed fully automated audio-processing workflows for bulk format conversion, loudness
+normalization, stem-based mixdowns, version creation, and mastering.
+- Eliminated manual workflows by replacing core processes with reliable, repeatable systems, significantly
+improving speed, consistency, and error reduction.
+- Maintained and supported business critical systems end-to-end, troubleshooting issues and enforcing
+internal technical standards across the organization.
+Dark Horse Recording, Intern & Executive Board Member | Dec 2019 – Jun 2022
+- Supported professional recording sessions and studio operations in a team-based production environment.
+- Contributed to operational improvements and helped manage intern program logistics.
+
+EDUCATION
+Computer Science, Systems/Scientific Applications (coursework)
+Western Kentucky University, Bowling Green, KY
+Audio Engineering Technology (coursework)
+Belmont University, Nashville, TN
+
+TECHNICAL SKILLS
+• Languages: Python, Java
+• Backend & Systems: Backend development,
+automation scripting, data processing pipelines
+• Data & Media: Metadata systems, data
+validation and transformation, audio and file-
+based workflows
+• Cloud & Infrastructure: AWS
+• Tools & Practices: Git, technical
+documentation, AI-assi
