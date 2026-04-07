@@ -1,5 +1,5 @@
 {
-  "version": "v3",
+  "version": "v4",
   "llm": {
     "provider": "ollama",
     "rule_model": "gemma3:4b",
@@ -14,7 +14,9 @@
     "include_all_jobs_list": true
   },
 
-  "blacklist": [],
+  "blacklist": [
+    "SynergisticIT"
+  ],
 
   "rules": [
   {
@@ -138,35 +140,6 @@
       "score": -50,
       "result_options": ["true", "false"],
       "trigger_result": "true"
-    },
-    {
-      "name": "api_or_services_work",
-      "prompt": "Does the role involve building APIs, services, or backend systems?",
-      "score": 10,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "fullstack_backend_leaning",
-      "prompt": "Is this a full-stack role with a strong emphasis on backend work rather than frontend?",
-      "score": 10,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "contract_role",
-      "prompt": "Is this a contract or temporary role rather than full-time employment?",
-      "score": -15,
-      "result_options": ["true", "false"],
-      "trigger_result": "true"
-    },
-    {
-      "name": "senior_or_above",
-      "prompt": "Is this a senior, staff, principal, or lead role?",
-      "score": -100,
-      "result_options": ["true", "false"],
-      "trigger_result": "true",
-      "terminate_options" : ["false"]
     },
     {
       "name": "devops_or_platform",
