@@ -109,12 +109,12 @@
     "trigger_result": "true"
   },
   {
-  "name": "no_strict_degree_requirement",
-  "prompt": "Does this job NOT clearly require a bachelor's degree in computer science or a related field (for example: degree is optional, preferred, equivalent experience allowed, or not mentioned)?",
-  "score": 3,
-  "result_options": ["true", "false"],
-  "trigger_result": "true"
-}
+    "name": "degree_flexible",
+    "prompt": "Does this job allow candidates without a bachelor's degree (for example: degree optional, preferred, or equivalent experience accepted)? Answer only 'true' or 'false'.",
+    "score": 3,
+    "result_options": ["true", "false"],
+    "trigger_result": "true"
+  }
 
 
 ],
