@@ -42,4 +42,4 @@ validation and transformation, audio and file-
 based workflows
 • Cloud & Infrastructure: AWS
 • Tools & Practices: Git, technical
-documentation, AI-assi
+documentation, AI-assisted programming

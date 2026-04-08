@@ -1,4 +1,4 @@
-Looking for a junior / entry-level software engineering role.
+Looking for a junior / entry-level / Software Developer I software engineering role.
 
 Target roles:
 - Software Engineer I, Junior Software Engineer, Entry-Level Developer, New Grad roles
@@ -8,10 +8,10 @@ Focus:
 - General software engineering, not specialized roles
 
 Avoid:
+- Senior, staff, lead, or mid-level positions
 - Frontend-heavy roles (React, UI/UX, styling)
 - DevOps, infrastructure, IT support, QA-only, data/analyst roles
-- Senior, staff, lead, or mid-level positions
-- Roles requiring more than 3 years of experience
+- Roles requiring more than 4 years of experience
 - Internships or co-op positions
 
 Preferences:
