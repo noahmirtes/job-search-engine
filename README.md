@@ -2,9 +2,7 @@
 
 This repo is a personal, local-first job search pipeline.
 
-The idea is simple: pull job results from Google Jobs through SerpApi, save the raw responses so nothing valuable gets lost, turn those results into normalized job rows, score them with Ollama, and export a spreadsheet that is actually usable when you're reviewing jobs.
-
-This is not an auto-apply bot. It is not trying to be a full SaaS app either. It is more like a practical filtering and review tool for one person running their own search.
+The idea is simple: pull job results from Google Jobs through SerpApi, save the raw responses, turn those results into normalized job rows, score them with Ollama, and export a spreadsheet that is actually usable when you're reviewing jobs.
 
 ## What it does
 
@@ -12,8 +10,8 @@ This is not an auto-apply bot. It is not trying to be a full SaaS app either. It
 - archives every returned search page in SQLite
 - keeps a normalized `jobs` table for deduped job records
 - remembers which query names a job came from
-- scores jobs with LLM-driven rules from `config/scoring.json`
-- adds a separate fit recommendation pass using your resume and ideal role text
+- scores jobs with LLM driven rules from `config/scoring.json`
+- adds a separate LLM driven fit recommendation pass using your resume and ideal role text
 - exports `.xlsx` reports to `config/reports/`
 - writes light operational logs to `config/worker.log`
 - falls back to `config/raw_response_backup/` if a raw response can't be written to SQLite
@@ -197,6 +195,51 @@ Plain text version of your resume for the fit recommendation pass.
 
 Plain text description of the kind of job you actually want.
 
+## How The Scoring Works
+
+Scoring is rule-based, but the rules are judged by an LLM.
+
+Each rule in `config/scoring.json` asks one simple question about the job posting. For example:
+
+```json
+{
+  "name": "seniority_too_high",
+  "prompt": "Does this role clearly target senior, staff, lead, principal, architect, manager, or otherwise advanced-level software engineers?",
+  "score": -10,
+  "result_options": ["true", "false"],
+  "trigger_result": "true",
+  "terminate_options": ["true"]
+}
+```
+
+The flow is pretty simple:
+
+1. A job gets turned into plain text.
+2. The model is asked each rule question one at a time.
+3. The model must answer using one of the allowed results, like `true` or `false`.
+4. If the answer matches the `trigger_result`, that rule's score is applied.
+5. All the rule scores are added together into the final numeric score.
+
+Some rules can also stop scoring early. Those use `terminate_options`.
+
+That is useful for obvious dealbreakers. For example, if a job is clearly senior-only or clearly not remote, there is not much value in spending more model calls scoring the rest of the posting. In those cases, the rule can act like an early exit.
+
+There is also a separate fit recommendation pass that labels the job as `low`, `medium`, or `high` fit using the job text, your resume, and your ideal job description. That fit label is helpful for review, but it does not currently change the numeric score.
+
+The tradeoff with LLM scoring is that it is flexible, but it is not perfectly consistent.
+
+A weaker model can still work, especially if the prompts are short and direct, but it will usually:
+
+- miss nuance more often
+- be less consistent from one job to the next
+- struggle more with messy or vague postings
+- need retries more often when the answer format is not clean
+
+A stronger model usually does a better job with gray-area decisions, but the cost is more compute, more memory pressure, and often slower runs.
+
+So the practical rule here is: keep the prompts simple, test the scoring on real examples, and do not assume a smaller model will make great judgment calls just because it can answer basic yes/no questions.
+
+
 ## Running it locally
 
 ### 1. Install dependencies
@@ -211,9 +254,66 @@ You will also need:
 
 - a working SerpApi key
 - Ollama running locally
-- the models referenced in `config/scoring.json`
+- model selections specified in `config/scoring.json`
 
-### 2. Run the pipeline
+### 2. Set up your config
+
+Before you run anything for real, make sure these files are in decent shape:
+
+- `config/.env`
+- `config/queries.json`
+- `config/scoring.json`
+- `config/resume.txt`
+- `config/ideal_job.txt`
+
+If those are messy or malformed, the pipeline will still run, but the output will usually be messy too.
+
+### 3. Pick your models
+
+My recommendation is to use two different kinds of models:
+
+- a smaller, coherent, "tiny but dependable" model for the rule scoring pass
+- a stronger thinking model for the fit recommendation pass
+
+That split works well because the rule scoring step is repetitive and structured. It is asking a lot of short closed-set questions like "is this senior?" or "is this remote?" That usually benefits more from consistency and speed than from heavy reasoning.
+
+The fit recommendation step is different. That one is trying to look at the job, your resume, and your target role together and make a broader judgment call. That tends to benefit from a stronger model.
+
+So in practice:
+
+- use the smaller model for `llm.rule_model`
+- use the stronger model for `llm.fit_model`
+- keep rule prompts short and clear
+- do not waste a big thinking model on every single rule unless you really need it
+
+I recommend gemma3:4b for rule scoring and gemma4:e2b for fit recommendations.
+
+### 4. Set up your rules well
+
+The rules matter a lot. A good rule set is usually better than a clever prompt.
+
+Some practical advice:
+
+- put the most important rules first
+- put clear dealbreakers at the top
+- use `terminate_options` for obvious hard stops
+- keep each rule focused on one idea
+- avoid stacking multiple judgments into one prompt
+
+The reason ordering matters is that dealbreakers can stop scoring early. So if you already know a job is senior-only, not remote, or otherwise clearly wrong, it is better to catch that fast instead of burning extra model calls on the rest of the rule list.
+
+### 5. Cast a wide net with queries
+
+It is usually better for the search queries to be broad and let scoring do the filtering.
+
+In other words:
+
+- let the queries pull in a wide range of maybe-relevant jobs
+- let the scoring rules narrow that set down
+
+If the queries are too narrow, you might miss jobs before the scoring system ever gets a chance to look at them. If the queries are a little broader, the scoring layer can do the cleanup.
+
+### 6. Run the pipeline
 
 The main local entrypoint is:
 
@@ -230,7 +330,7 @@ That script prompts you to choose:
 - scoring + report
 - search + scoring + report
 
-### 3. Check outputs
+### 7. Check outputs
 
 After a run, the main things to look at are:
 
