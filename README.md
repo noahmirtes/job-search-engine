@@ -27,9 +27,9 @@ At a high level, the flow is:
 5. Score jobs that are scorable.
 6. Generate an Excel report.
 
-One important design choice here: raw search responses are treated as the source of truth.
+One important design choice here: raw search responses are treated as the source of truth. Everything in the pipeline is derived from these raw responses.
 
-That means the search stage is intentionally "archive first, derive second." If parsing or job upserting fails later, the raw response is still preserved and can be replayed with the backfill script.
+That means the search stage is intentionally "archive first, derive second." If parsing or job upserting fails later, the raw response is still preserved and can be replayed with the backfill script. Each request is valuable and limited, so preserving that data immediately is a priority.
 
 ## Project layout
 
@@ -71,11 +71,11 @@ job-search-engine/
 
 Runs the search queries and handles the archive-first ingest flow.
 
-- asks SerpApi for one page at a time
+- asks SerpAPI for one page at a time
 - stores each returned attempt in `raw_requests`
 - commits that raw row immediately
 - only then upserts normalized jobs
-- writes a JSON backup to `config/raw_response_backup/` if the raw DB write fails
+- If the write to the database fails, it will write a JSON backup to `config/raw_response_backup/` to preserve the raw response from SerpAPI
 
 ### `app/jobs.py`
 
@@ -92,13 +92,13 @@ It also handles:
 
 Scores jobs using the rules in `config/scoring.json`.
 
-Right now scoring is LLM-driven, not keyword-driven.
+Scoring is LLM-driven.
 
 - each rule is a closed-set classification call
 - scores add up into a numeric total
 - some rules can terminate scoring early
-- a separate pass adds a `low` / `medium` / `high` fit recommendation
-- blacklisted companies are skipped before Ollama is called
+- a separate pass adds a `low` / `medium` / `high` fit recommendation based on the users ideal job and the text of their resume
+- blacklisted companies are excluded from scoring and reporting
 
 ### `app/reporting.py`
 
@@ -109,9 +109,9 @@ Current report behavior:
 - exports to `config/reports/`
 - includes `new` and `all` sheets
 - can optionally include `all_jobs_list`
-- shows source query names
 - hyperlinks apply locations directly in the sheet
-- uses light pastel formatting for readability
+- uses color formatting for readability
+- includes various other data points about the job
 
 ## Config files
 
@@ -122,7 +122,7 @@ Everything important lives in `config/`.
 Private env vars. At minimum you need:
 
 ```env
-SERPAPI_API_KEY=your_key_here
+SERPAPI_API_KEY=123456abcdef
 ```
 
 The app loads this file itself in Python. You do not need to `source` it manually.
@@ -290,17 +290,16 @@ I recommend gemma3:4b for rule scoring and gemma4:e2b for fit recommendations.
 
 ### 4. Set up your rules well
 
-The rules matter a lot. A good rule set is usually better than a clever prompt.
+The rules matter a lot. The questions you ask and the way you order them is critical for properly scoring jobs.
 
 Some practical advice:
-
 - put the most important rules first
 - put clear dealbreakers at the top
 - use `terminate_options` for obvious hard stops
 - keep each rule focused on one idea
 - avoid stacking multiple judgments into one prompt
 
-The reason ordering matters is that dealbreakers can stop scoring early. So if you already know a job is senior-only, not remote, or otherwise clearly wrong, it is better to catch that fast instead of burning extra model calls on the rest of the rule list.
+The reason ordering matters is that dealbreakers can stop scoring early. So if you already know a job is clearly not what you are looking for, it is better to catch that fast instead of burning extra model calls on the rest of the rule list.
 
 ### 5. Cast a wide net with queries
 
@@ -308,10 +307,19 @@ It is usually better for the search queries to be broad and let scoring do the f
 
 In other words:
 
-- let the queries pull in a wide range of maybe-relevant jobs
+- let the queries pull in a wide range of possibly relevant jobs
 - let the scoring rules narrow that set down
 
-If the queries are too narrow, you might miss jobs before the scoring system ever gets a chance to look at them. If the queries are a little broader, the scoring layer can do the cleanup.
+If the queries are too narrow, you might miss jobs before the scoring system ever gets a chance to look at them. If the queries are a little broader, the scoring layer can do the cleanup. Include some ultra specific queries as well as more general queries. If filtering by remote work, include some with `remote` in the search query, others with `"ltype" : 1` (a depreciated but still functioning paramater for Google Jobs).
+
+More queries means more SerpAPI requests. You can determine based on result performance, the job market, and other factors what request tier is right for you.
+
+At the time of writing, these are the basic tiers.
+```txt
+Free = 250 requests
+Starter = 1000 requests
+Developer = 5000 requests
+```
 
 ### 6. Run the pipeline
 
@@ -401,7 +409,7 @@ It is meant to be useful when something breaks, without turning into a wall of n
 
 There is also an orchestrator in `orchestrator/` for scheduled profile-based runs.
 
-That path is separate from the local interactive runner and is mainly for full automated runs. If you're just working on the system manually, start with `scripts/run_pipeline.py`.
+That path is separate from the local interactive runner and is mainly for full automated runs of many users. If you're just working on the system manually, start with `scripts/run_pipeline.py`.
 
 ## A few honest rough edges
 
@@ -422,5 +430,3 @@ If you come back to this after a while and want the shortest possible path back 
 3. Make sure Ollama is running
 4. Run `python3 scripts/run_pipeline.py`
 5. Read `config/worker.log` if anything feels off
-
-That should be enough to get your bearings again without having to rediscover the whole codebase from scratch.
