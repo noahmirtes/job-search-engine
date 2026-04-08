@@ -311,7 +311,6 @@ Some current realities:
 
 - there are no real automated tests yet
 - Ollama model behavior can still be the main source of instability
-- `app/main.py` is basically an old local smoke script, not the real entrypoint
 - the repo is optimized for one person's workflow first
 
 ## If you are picking this up later
