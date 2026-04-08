@@ -73,7 +73,7 @@ def main() -> None:
 
         LOGGER.info("Stage start: scoring")
         with get_connection(config.paths.db_path) as connection:
-            scoring_summary = run_job_scoring(connection, config, only_unscored=False)
+            scoring_summary = run_job_scoring(connection, config, only_unscored=True)
 
     if stage_plan.run_report:
         from app.reporting import generate_report
