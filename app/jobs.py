@@ -62,6 +62,10 @@ def upsert_jobs_from_payload(
             anchor_requested_at_utc=anchor_requested_at_utc,
             query_name=query_name,
         )
+
+        if not hasattr(record, "description") or not record.description:
+            continue
+
         _upsert_job(connection, record)
         processed_count += 1
 
@@ -99,7 +103,7 @@ def _to_job_record(
     title = _as_text(raw_job.get("title")) or "Unknown title"
     company = _as_text(raw_job.get("company_name")) or "Unknown company"
     location = _as_text(raw_job.get("location"))
-    description = _as_text(raw_job.get("description"))
+    description = _clean_excessive_linebreaks(raw_job.get("description"))
     share_link = _as_text(raw_job.get("share_link"))
     via = _as_text(raw_job.get("via"))
     thumbnail = _as_text(raw_job.get("thumbnail"))
@@ -177,6 +181,9 @@ def _upsert_job(connection: sqlite3.Connection, record: JobRecord) -> None:
         connection=connection,
         source_job_id=record.source_job_id,
         normalized_hash=record.normalized_hash,
+        company=record.company,
+        title=record.title,
+        description=record.description
     )
     existing_job_id = None if existing_job_row is None else int(existing_job_row["id"])
 
@@ -312,8 +319,11 @@ def _find_existing_job_row(
     *,
     source_job_id: str | None,
     normalized_hash: str,
+    company: str,
+    title: str,
+    description: str,
 ) -> sqlite3.Row | None:
-    """Find existing job row by source id first, then fallback normalized hash."""
+    """Find existing job row by source id first, then fallback normalized hash or company, title, and description."""
     if source_job_id:
         row = connection.execute(
             "SELECT id, query_names_json FROM jobs WHERE source_job_id = ? LIMIT 1",
@@ -323,8 +333,20 @@ def _find_existing_job_row(
             return row if isinstance(row, sqlite3.Row) else None
 
     row = connection.execute(
-        "SELECT id, query_names_json FROM jobs WHERE normalized_hash = ? LIMIT 1",
-        (normalized_hash,),
+        """
+        SELECT id, query_names_json
+        FROM jobs
+        WHERE
+            normalized_hash = ?
+        OR (company = ? AND title = ? AND description = ?)
+        LIMIT 1
+        """,
+        (
+            normalized_hash,
+            company,
+            title,
+            description,
+        ),
     ).fetchone()
     return row if isinstance(row, sqlite3.Row) else None
 
@@ -413,6 +435,17 @@ def _as_text(value: Any) -> str | None:
         text = value.strip()
         return text or None
     return None
+
+
+def _clean_excessive_linebreaks(value) -> str | None:
+    """A simple text utility to reduce excessive line breaks in job descriptions."""
+    if not value:
+        return value
+    
+    if isinstance(value, str):
+        while "\n\n\n" in value:
+            value = value.replace("\n\n\n", "\n\n")
+        return value
 
 
 def _as_int_bool(value: Any) -> int | None:

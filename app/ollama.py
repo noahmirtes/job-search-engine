@@ -54,6 +54,7 @@ def classify_rule_result(
 
             normalized_result = _normalize_option(parsed_result)
             if normalized_result in normalized_options:
+                print(f"   {raw_response}")
                 return normalized_result
             raise ValueError(
                 f"Model returned '{parsed_result}', not in allowed options: {result_options}"
@@ -151,6 +152,8 @@ def _build_classification_prompt(
         f"Job text:\n{job_text}\n\n"
         "The value of \"result\" must be exactly one of the allowed result values.\n\n"
         f"Question:\n{question}\n\n"
+        "Return only valid JSON matching this exact schema:\n"
+        '{"result":"<allowed value>"}\n'
     )
 
 
