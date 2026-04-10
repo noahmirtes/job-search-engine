@@ -16,6 +16,7 @@
 
   "blacklist": [
     "SynergisticIT",
+    "Synergistic it",
     "Mercor",
     "Plug & Solve"
   ],
@@ -55,7 +56,7 @@
   },
   {
     "name": "contract_only",
-    "prompt": "Is this role clearly contract-only, temporary, freelance, or otherwise not a full-time permanent position?",
+    "prompt": "Is it explicitly stated that this role is contract-only, temporary, freelance, or an internship?",
     "score": -10,
     "result_options": ["true", "false"],
     "trigger_result": "true",
