@@ -1,35 +1,38 @@
 # Job Search Decision Engine
 
-This repo is a personal, local-first job search pipeline.
+This is a local job search tool.
 
-The idea is simple: pull job results from Google Jobs through SerpApi, save the raw responses, turn those results into normalized job rows, score them with Ollama, and export a spreadsheet that is actually usable when you're reviewing jobs.
+It pulls jobs from Google Jobs through SerpAPI, stores the raw responses so nothing valuable gets lost, turns them into normalized rows, scores them with Ollama, and spits out a report that is actually usable when you are trying to review jobs quickly.
+
+That is the whole point of the project: less noise, better filtering, and a workflow that still keeps you in control.
 
 ## What it does
 
-- runs saved job search queries from `config/queries.json`
-- archives every returned search page in SQLite
-- keeps a normalized `jobs` table for deduped job records
+- runs saved job queries from `config/queries.json`
+- archives every search page returned by SerpAPI
+- keeps a normalized `jobs` table in SQLite
 - remembers which query names a job came from
-- scores jobs with LLM driven rules from `config/scoring.json`
-- adds a separate LLM driven fit recommendation pass using your resume and ideal role text
+- scores jobs with LLM-based rules from `config/scoring.json`
+- runs a separate fit recommendation pass using your resume and ideal role text
 - exports `.xlsx` reports to `config/reports/`
-- writes light operational logs to `config/worker.log`
-- falls back to `config/raw_response_backup/` if a raw response can't be written to SQLite
+- writes lightweight logs to `config/worker.log`
+- falls back to `config/raw_response_backup/` if a raw response cannot be written to SQLite
 
 ## How the pipeline works
 
-At a high level, the flow is:
+At a high level, the pipeline is:
 
-1. Load config from `config/`.
-2. Run the enabled SerpApi queries.
-3. Archive each returned raw search page right away.
-4. Parse and upsert jobs from that raw payload.
-5. Score jobs that are scorable.
-6. Generate an Excel report.
+1. Load config from `config/`
+2. Run the enabled searches
+3. Save each raw response immediately
+4. Parse jobs out of that raw response
+5. Upsert the normalized jobs
+6. Score the jobs that are usable
+7. Generate a report
 
-One important design choice here: raw search responses are treated as the source of truth. Everything in the pipeline is derived from these raw responses.
+One design choice matters more than most of the others: raw search responses are treated as the source of truth.
 
-That means the search stage is intentionally "archive first, derive second." If parsing or job upserting fails later, the raw response is still preserved and can be replayed with the backfill script. Each request is valuable and limited, so preserving that data immediately is a priority.
+So the search flow is intentionally "archive first, derive second." If parsing or upserting fails later, the raw response is still there and can be recomputed. That matters because every request has tangible monetary and information value.
 
 ## Project layout
 
@@ -69,49 +72,52 @@ job-search-engine/
 
 ### `app/search.py`
 
-Runs the search queries and handles the archive-first ingest flow.
+This is where the searches run.
+
+It:
 
 - asks SerpAPI for one page at a time
 - stores each returned attempt in `raw_requests`
-- commits that raw row immediately
-- only then upserts normalized jobs
-- If the write to the database fails, it will write a JSON backup to `config/raw_response_backup/` to preserve the raw response from SerpAPI
+- commits that raw row right away
+- only then parses and upserts jobs
+- writes a JSON backup to `config/raw_response_backup/` if the raw DB write fails
 
 ### `app/jobs.py`
 
-Turns `jobs_results` payloads into normalized rows in `jobs`.
+This is the job normalization layer.
 
-It also handles:
+It handles:
 
+- parsing `jobs_results`
 - deduping
 - query-source tracking with `query_names_json`
-- derived `date_posted`
-- scorable vs unscorable flagging
+- `date_posted`
+- deciding whether a job is scorable or not
 
 ### `app/scoring.py`
 
-Scores jobs using the rules in `config/scoring.json`.
+This is the scoring engine.
 
-Scoring is LLM-driven.
+Scoring is LLM-driven:
 
-- each rule is a closed-set classification call
-- scores add up into a numeric total
-- some rules can terminate scoring early
-- a separate pass adds a `low` / `medium` / `high` fit recommendation based on the users ideal job and the text of their resume
+- each rule is a closed-set classification question
+- the rule results add up into a numeric score
+- some rules can stop scoring early
+- a separate fit pass adds a `low`, `medium`, or `high` label
 - blacklisted companies are excluded from scoring and reporting
 
 ### `app/reporting.py`
 
-Builds the Excel output.
+This builds the Excel report.
 
-Current report behavior:
+Right now the report:
 
-- exports to `config/reports/`
-- includes `new` and `all` sheets
+- writes to `config/reports/`
+- includes `new` and `all`
 - can optionally include `all_jobs_list`
-- hyperlinks apply locations directly in the sheet
-- uses color formatting for readability
-- includes various other data points about the job
+- hyperlinks the apply locations directly in the sheet
+- uses color formatting to make the spreadsheet easier to scan
+- includes extra job data that is useful during review
 
 ## Config files
 
@@ -125,13 +131,13 @@ Private env vars. At minimum you need:
 SERPAPI_API_KEY=123456abcdef
 ```
 
-The app loads this file itself in Python. You do not need to `source` it manually.
+The app loads this file itself. You do not need to `source` it manually.
 
-If an env var is already set in the shell or on the machine, that existing value wins over the `.env` file.
+If a variable is already set in your shell or on the machine, that value wins over the one in `.env`.
 
 ### `config/queries.json`
 
-Defines the searches to run.
+This file defines the searches.
 
 Each entry has:
 
@@ -163,17 +169,17 @@ Example:
 
 ### `config/scoring.json`
 
-Controls the scoring behavior.
+This file controls scoring.
 
 It currently includes:
 
 - scoring version
 - rule model and fit model
-- think-mode settings
-- max retries for each LLM call
+- think settings
+- max retries
 - report settings
 - company blacklist
-- active rules
+- the active rules
 
 Example blacklist shape:
 
@@ -185,21 +191,21 @@ Example blacklist shape:
 }
 ```
 
-Blacklist matching is exact after trim + lowercase normalization.
+Blacklist matching is intentionally simple: exact match after trim + lowercase normalization.
 
 ### `config/resume.txt`
 
-Plain text version of your resume for the fit recommendation pass.
+Plain text version of your resume for the fit pass.
 
 ### `config/ideal_job.txt`
 
-Plain text description of the kind of job you actually want.
+Plain text description of the kind of role you actually want.
 
-## How The Scoring Works
+## How the scoring works
 
-Scoring is rule-based, but the rules are judged by an LLM.
+The scoring is rule-based, but the rules are judged by an LLM.
 
-Each rule in `config/scoring.json` asks one simple question about the job posting. For example:
+Each rule asks one focused question about the posting. For example:
 
 ```json
 {
@@ -212,33 +218,38 @@ Each rule in `config/scoring.json` asks one simple question about the job postin
 }
 ```
 
-The flow is pretty simple:
+The basic flow is:
 
-1. A job gets turned into plain text.
-2. The model is asked each rule question one at a time.
-3. The model must answer using one of the allowed results, like `true` or `false`.
-4. If the answer matches the `trigger_result`, that rule's score is applied.
-5. All the rule scores are added together into the final numeric score.
+1. Turn the job into plain text
+2. Ask the model each rule question
+3. Force the model to answer with one allowed result
+4. Apply the score if the result matches the trigger
+5. Add everything up into the final numeric score
 
-Some rules can also stop scoring early. Those use `terminate_options`.
+Some rules are dealbreakers. Those use `terminate_options`. If one of those fires, scoring stops early for that job.
 
-That is useful for obvious dealbreakers. For example, if a job is clearly senior-only or clearly not remote, there is not much value in spending more model calls scoring the rest of the posting. In those cases, the rule can act like an early exit.
+That is useful for obvious cases like:
 
-There is also a separate fit recommendation pass that labels the job as `low`, `medium`, or `high` fit using the job text, your resume, and your ideal job description. That fit label is helpful for review, but it does not currently change the numeric score.
+- clearly senior roles
+- clearly non-remote roles
+- clearly contract-only roles
 
-The tradeoff with LLM scoring is that it is flexible, but it is not perfectly consistent.
+There is also a separate fit pass that labels the job as `low`, `medium`, or `high` fit using:
 
-A weaker model can still work, especially if the prompts are short and direct, but it will usually:
+- the job text
+- your resume
+- your ideal job description
 
-- miss nuance more often
-- be less consistent from one job to the next
-- struggle more with messy or vague postings
-- need retries more often when the answer format is not clean
+That fit label is useful, but it does not currently change the numeric score. Instead, it acts as another signal and helps to balance out potential incorrectly scored rows due to model failure, inadequate job descriptions, or other speed bumps.
 
-A stronger model usually does a better job with gray-area decisions, but the cost is more compute, more memory pressure, and often slower runs.
+The tradeoff with LLM scoring is pretty straightforward: it is flexible and handles nuance better than raw keyword matching. However, weaker models are more likely to miss obvious things or be more inconsistent overall
 
-So the practical rule here is: keep the prompts simple, test the scoring on real examples, and do not assume a smaller model will make great judgment calls just because it can answer basic yes/no questions.
+So the practical advice is:
 
+- keep the prompts short
+- keep the questions direct
+- test the scoring on real jobs
+- do not assume a smaller model will make great judgment calls just because it can answer basic yes/no questions
 
 ## Running it locally
 
@@ -250,15 +261,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-You will also need:
+You also need:
 
-- a working SerpApi key
+- a working SerpAPI key
 - Ollama running locally
-- model selections specified in `config/scoring.json`
+- model choices set in `config/scoring.json`
 
 ### 2. Set up your config
 
-Before you run anything for real, make sure these files are in decent shape:
+Before you run anything for real, make sure these are in decent shape:
 
 - `config/.env`
 - `config/queries.json`
@@ -266,59 +277,83 @@ Before you run anything for real, make sure these files are in decent shape:
 - `config/resume.txt`
 - `config/ideal_job.txt`
 
-If those are messy or malformed, the pipeline will still run, but the output will usually be messy too.
+If those are sloppy, the pipeline will still run, but the output will probably be sloppy too.
 
 ### 3. Pick your models
 
-My recommendation is to use two different kinds of models:
+Right now my recommendation is to use `gemma4:e2b` for both rule scoring and fit recommendations.
 
-- a smaller, coherent, "tiny but dependable" model for the rule scoring pass
-- a stronger thinking model for the fit recommendation pass
+That has been giving solid results across both passes without the extra weirdness I was seeing from weaker models. I use the non thinking model on the rule scoring and the thinking model on the fit scoring.
 
-That split works well because the rule scoring step is repetitive and structured. It is asking a lot of short closed-set questions like "is this senior?" or "is this remote?" That usually benefits more from consistency and speed than from heavy reasoning.
+Thinking modes can be set indepentently for those two scoring modules. Thinking settings can be found in `scoring.json`.
 
-The fit recommendation step is different. That one is trying to look at the job, your resume, and your target role together and make a broader judgment call. That tends to benefit from a stronger model.
+Run this command to download your selected model(s)
+```bash
+ollama pull <model_name>
+```
 
-So in practice:
+The code does support using different models for each pass:
 
-- use the smaller model for `llm.rule_model`
-- use the stronger model for `llm.fit_model`
-- keep rule prompts short and clear
-- do not waste a big thinking model on every single rule unless you really need it
+- `llm.rule_model`
+- `llm.fit_model`
 
-I recommend gemma3:4b for rule scoring and gemma4:e2b for fit recommendations.
+So if you want to experiment, you can absolutely split them. But if you just want something that works, start simple and use one strong model for both.
+
+Short version:
+
+- easiest setup: `gemma4:e2b` for both
+- advanced setup: separate models if you have a clear reason
+- either way, keep the rule prompts clean and direct
+
+A critical factor in selecting your models is your hardware. For those of us without super powerful rigs and GPUs, the model selection is the most important part of the system, as the model quality dictates the scoring quality. I run `gemma4:e2b` on my M4 Mac Mini 16GB RAM and it runs quite well, though I do need to make sure there are no needless apps running that are taking up memory in order to prevent swap.
+
+That said, I recommend:
+
+- `gemma4:e2b` for CPU bound runs with 16GB RAM available.
+- `gemma3:4b` for CPU bound runs with 8GB RAM available.
+
+For reference, on my hardware, I average full scoring (rule and fit scoring) of 5.6 jobs per minute. Scoring runs can be long, but I explicitly wanted to keep this pipeline minimal and local, so the tradeoff is okay with me.
 
 ### 4. Set up your rules well
 
-The rules matter a lot. The questions you ask and the way you order them is critical for properly scoring jobs.
+The rule list matters a lot. Good rules beat clever wording.
 
 Some practical advice:
+
 - put the most important rules first
-- put clear dealbreakers at the top
+- put dealbreakers at the top
 - use `terminate_options` for obvious hard stops
 - keep each rule focused on one idea
-- avoid stacking multiple judgments into one prompt
+- avoid cramming multiple judgments into one prompt unless you really know what you are doing
 
-The reason ordering matters is that dealbreakers can stop scoring early. So if you already know a job is clearly not what you are looking for, it is better to catch that fast instead of burning extra model calls on the rest of the rule list.
+Ordering matters because dealbreakers can stop scoring early. If a role is clearly wrong, it is better to catch that immediately than to waste more model calls on the rest of the rule list.
 
 ### 5. Cast a wide net with queries
 
-It is usually better for the search queries to be broad and let scoring do the filtering.
+In general, it is better for your queries to be a little broader and let scoring do the filtering.
 
 In other words:
 
-- let the queries pull in a wide range of possibly relevant jobs
+- let the search pull in a wider set of maybe-relevant jobs
 - let the scoring rules narrow that set down
 
-If the queries are too narrow, you might miss jobs before the scoring system ever gets a chance to look at them. If the queries are a little broader, the scoring layer can do the cleanup. Include some ultra specific queries as well as more general queries. If filtering by remote work, include some with `remote` in the search query, others with `"ltype" : 1` (a depreciated but still functioning paramater for Google Jobs).
+If the queries are too narrow, you can miss good jobs before scoring even gets a chance to look at them.
 
-More queries means more SerpAPI requests. You can determine based on result performance, the job market, and other factors what request tier is right for you.
+I’d recommend using a mix of:
 
-At the time of writing, these are the basic tiers.
+- ultra-specific queries
+- broader general queries
+- some queries with `remote`
+- some queries with `"ltype": "1"` since that old Google Jobs param still works
+
+More queries means more SerpAPI requests, so there is a consequential tradeoff there depending on your API tier. You can tune that based on how often you run the system, how broad the market is, and what request tier you are on.
+
+At the time of writing, the basic SerpAPI tiers look like this:
+
 ```txt
 Free = 250 requests
-Starter = 1000 requests
-Developer = 5000 requests
+Starter = 1000 requests at $25 / mo
+Developer = 5000 requests at $75 / mo
 ```
 
 ### 6. Run the pipeline
@@ -338,9 +373,9 @@ That script prompts you to choose:
 - scoring + report
 - search + scoring + report
 
-### 7. Check outputs
+### 7. Check the outputs
 
-After a run, the main things to look at are:
+After a run, the main things to check are:
 
 - `config/jobs.db`
 - `config/reports/`
@@ -372,7 +407,7 @@ python3 scripts/recompute_job_scorability.py
 python3 scripts/upsert_jobs_from_raw.py
 ```
 
-That last one is especially helpful if raw responses are intact but normalized job rows need to be rebuilt.
+That last one is especially handy if the raw responses are still good but the normalized job rows need to be rebuilt.
 
 ## Database overview
 
@@ -384,46 +419,45 @@ The main tables are:
 - `exports`: report history
 - `export_jobs`: which jobs were included in each export
 
-A couple of helpful notes:
+A couple of notes that are worth remembering:
 
-- `jobs.query_names_json` tracks which queries a job came from
-- `job_scores.scoring_status` can be things like `ok`, `failed`, or `blacklisted`
+- `jobs.query_names_json` tracks which queries found a job
+- `job_scores.scoring_status` can be `ok`, `failed`, or `blacklisted`
 - "new" jobs in the report are based on the latest row in `exports`, not `export_jobs`
 
 ## Logging
 
 Worker logs go to `config/worker.log` and also print to the terminal.
 
-The logging is intentionally light and top-level. It covers things like:
+The logging is intentionally light. It covers things like:
 
 - queries starting and finishing
 - page/archive results
 - scoring progress
 - fit recommendation progress
 - report generation
-- script start/finish summaries
+- script start and finish summaries
 
-It is meant to be useful when something breaks, without turning into a wall of noise.
+The goal is to make it useful when something breaks.
 
 ## Orchestrator
 
-There is also an orchestrator in `orchestrator/` for scheduled profile-based runs.
+There is also an orchestrator in `orchestrator/` for scheduled profile runs.
 
-That path is separate from the local interactive runner and is mainly for full automated runs of many users. If you're just working on the system manually, start with `scripts/run_pipeline.py`.
+That is separate from the local interactive runner. If you are just working with the system manually, start with `scripts/run_pipeline.py`.
 
 ## A few honest rough edges
 
-This project is useful, but it is still a working tool rather than a polished product.
+This tool is useful, but it is still a working tool, not a polished product.
 
 Some current realities:
 
-- there are no real automated tests yet
-- Ollama model behavior can still be the main source of instability
-- the repo is optimized for one person's workflow first
+- Ollama behavior is still one of the main sources of instability
+- the repo is optimized for a personal workflow first
 
 ## If you are picking this up later
 
-If you come back to this after a while and want the shortest possible path back in:
+If you come back to this later and just want the shortest path back in:
 
 1. Check `config/scoring.json`
 2. Check `config/queries.json`
