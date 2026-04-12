@@ -32,7 +32,7 @@
   },
   {
     "name": "experience_too_high",
-    "prompt": "Does this role clearly require more than 4 years of professional software engineering experience?",
+    "prompt": "Does this role explicitly require more than 4 years of professional software engineering experience?",
     "score": -8,
     "result_options": ["true", "false"],
     "trigger_result": "true",
