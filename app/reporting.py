@@ -502,7 +502,7 @@ def _format_query_names(raw_query_names_json: str | None) -> str:
 
 def _build_report_file_name() -> str:
     """Build stable timestamped report filename."""
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y.%m.%d. (T%H%M%SZ)")
     return f"job_report_{stamp}.xlsx"
 
 
